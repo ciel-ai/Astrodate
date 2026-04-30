@@ -5,10 +5,7 @@
  * for astrology-related conversations via Supabase Edge Functions
  */
 
-import { supabase } from './supabase';
-
-const SUPABASE_URL = "https://ykgbfrpkumlnogjdgqgb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrZ2JmcnBrdW1sbm9namRncWdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MzM2MzgsImV4cCI6MjA3OTEwOTYzOH0.0RUq2i39uuwmeGcQ8ySwzz9NZOAUmmt7H51TE411F2M";
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from './supabase';
 
 /**
  * Lists available Gemini models

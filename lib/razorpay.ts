@@ -1,6 +1,5 @@
 import * as WebBrowser from 'expo-web-browser';
-const SUPABASE_URL = 'https://ykgbfrpkumlnogjdgqgb.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrZ2JmcnBrdW1sbm9namRncWdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MzM2MzgsImV4cCI6MjA3OTEwOTYzOH0.0RUq2i39uuwmeGcQ8ySwzz9NZOAUmmt7H51TE411F2M';
+import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from './supabase';
 
 
 const SUPABASE_CREATE_LINK_URL = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/razorpay-link` : '';
@@ -23,12 +22,18 @@ export async function createRazorpayPaymentLink(payload: PlanCheckoutPayload) {
     throw new Error('Supabase function URL or anon key missing. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
   }
 
+  // Use the authenticated user's session token as the Bearer token.
+  // The anon key is a public identifier — using it as Authorization
+  // means anyone who intercepts the request can create payment links.
+  const { data: { session } } = await supabase.auth.getSession();
+  const authToken = session?.access_token ?? SUPABASE_ANON_KEY;
+
   const resp = await fetch(SUPABASE_CREATE_LINK_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${authToken}`,
     },
     body: JSON.stringify(payload),
   });
@@ -65,12 +70,16 @@ export async function checkRazorpayPaymentLinkStatus(paymentLinkId: string) {
   if (!SUPABASE_STATUS_URL || !SUPABASE_ANON_KEY) {
     throw new Error('Supabase function URL or anon key missing.');
   }
+  // Use the authenticated user's session token as the Bearer token.
+  const { data: { session } } = await supabase.auth.getSession();
+  const authToken = session?.access_token ?? SUPABASE_ANON_KEY;
+
   const resp = await fetch(SUPABASE_STATUS_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${authToken}`,
     },
     body: JSON.stringify({ id: paymentLinkId }),
   });

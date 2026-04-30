@@ -1,9 +1,23 @@
-// lib/supabase.ts
+// lib/supabase.ts — single source of truth for the Supabase client.
+// Credentials are read from environment variables so they are never
+// hardcoded in source files or baked into the APK bundle.
+//
+// Add these to your .env file (and to EAS Secrets for CI/CD builds):
+//   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+//   EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://ykgbfrpkumlnogjdgqgb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrZ2JmcnBrdW1sbm9namRncWdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MzM2MzgsImV4cCI6MjA3OTEwOTYzOH0.0RUq2i39uuwmeGcQ8ySwzz9NZOAUmmt7H51TE411F2M";
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    'Missing Supabase credentials. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file.'
+  );
+}
+
+export { SUPABASE_ANON_KEY, SUPABASE_URL };
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

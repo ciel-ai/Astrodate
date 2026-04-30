@@ -14,12 +14,10 @@
  */
 
 
-// Edge Function URL
-const EDGE_FUNCTION_URL = 'https://ykgbfrpkumlnogjdgqgb.supabase.co/functions/v1/face-verification';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase';
 
-// Supabase API Key (using same key from supabase.ts for consistency)
-const SUPABASE_URL = 'https://ykgbfrpkumlnogjdgqgb.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrZ2JmcnBrdW1sbm9namRncWdiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1MzM2MzgsImV4cCI6MjA3OTEwOTYzOH0.0RUq2i39uuwmeGcQ8ySwzz9NZOAUmmt7H51TE411F2M';
+// Edge Function URL — derived from the single source-of-truth SUPABASE_URL
+const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/face-verification`;
 
 export interface FaceDetectionResult {
   success: boolean;
@@ -53,14 +51,14 @@ const imageUriToBase64 = async (uri: string): Promise<string> => {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', uri, true);
     xhr.responseType = 'blob';
-    
+
     xhr.onload = () => {
       if (xhr.status === 200 || xhr.status === 0) {
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64data = reader.result as string;
-          const base64 = base64data.includes(',') 
-            ? base64data.split(',')[1] 
+          const base64 = base64data.includes(',')
+            ? base64data.split(',')[1]
             : base64data;
           resolve(base64);
         };
@@ -70,11 +68,11 @@ const imageUriToBase64 = async (uri: string): Promise<string> => {
         reject(new Error(`Failed to load image: HTTP ${xhr.status}`));
       }
     };
-    
+
     xhr.onerror = () => reject(new Error('Network error while loading image'));
     xhr.ontimeout = () => reject(new Error('Timeout while loading image'));
     xhr.timeout = 30000;
-    
+
     try {
       xhr.send();
     } catch (error) {
@@ -97,10 +95,10 @@ export const detectFaceInImage = async (
 ): Promise<FaceDetectionResult> => {
   try {
     console.log('📸 Detecting face in image using Gemini API:', imageUri);
-    
+
     // Convert image to base64
     const base64Image = await imageUriToBase64(imageUri);
-    
+
     // Call Edge Function (which uses Gemini API internally)
     const response = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
@@ -171,13 +169,13 @@ export const verifySamePerson = async (
 ): Promise<FaceVerificationResult> => {
   try {
     console.log('🔍 Verifying if faces match using Gemini API');
-    
+
     // Convert both images to base64
     const [base64Image1, base64Image2] = await Promise.all([
       imageUriToBase64(imageUri1),
       imageUriToBase64(imageUri2),
     ]);
-    
+
     // Call Edge Function (which uses Gemini API for image comparison)
     const response = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
@@ -251,7 +249,7 @@ export const verifyAllPhotos = async (
 }> => {
   try {
     console.log('📸 Verifying all photos using Gemini API:', imageUris.length, 'images');
-    
+
     // Convert all images to base64
     const base64Images = await Promise.all(
       imageUris.map(uri => imageUriToBase64(uri))

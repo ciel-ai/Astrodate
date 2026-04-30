@@ -315,7 +315,7 @@ export default function ProfileDetailsScreen() {
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<ProfileDetails | null>(null);
   const [matchedUserId, setMatchedUserId] = useState<string | null>(null);
-  const [currentUserPhoto, setCurrentUserPhoto] = useState<any>(require('@/assets/images/sydney.jpg'));
+  const [currentUserPhoto, setCurrentUserPhoto] = useState<any>(require('@/assets/images/avatar-placeholder.png'));
   const [isSuperlikedByProfile, setIsSuperlikedByProfile] = useState(false);
 
   // Fetch current user's primary photo
@@ -363,6 +363,21 @@ export default function ProfileDetailsScreen() {
       headerShown: false,
     });
   }, [navigation]);
+
+  // Clear the module-level profile cache when the user signs out.
+  // The cache lives at module scope so it persists across sessions — without
+  // this, user B logging in after user A could see user A's cached profile cards
+  // until the 2-minute TTL expires.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event) => {
+      if (_event === 'SIGNED_OUT') {
+        profileDetailsCache.clear();
+      }
+    });
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     // If we already have profile data from initialData, we don't need to show loading
@@ -498,7 +513,7 @@ export default function ProfileDetailsScreen() {
         gender: profileResult.data.gender || profileResult.data.gender_detail || undefined,
         image: photosData && photosData.length > 0
           ? { uri: photosData.find((p: any) => p.is_primary)?.photo_url || photosData[0].photo_url }
-          : require('@/assets/images/sydney.jpg'),
+          : require('@/assets/images/avatar-placeholder.png'),
         photos: photosData && photosData.length > 0
           ? photosData.map((p: any) => ({ uri: p.photo_url }))
           : undefined,
@@ -649,7 +664,7 @@ export default function ProfileDetailsScreen() {
     ? profile.photos
     : profile.image
       ? [profile.image]
-      : [require('@/assets/images/sydney.jpg')];
+      : [require('@/assets/images/avatar-placeholder.png')];
   const totalImages = images.length;
 
   // Handle photo tap to cycle through photos: forward (1->2->3) then backward (3->2->1)

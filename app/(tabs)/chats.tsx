@@ -14,7 +14,7 @@ import {
   AppState,
   Modal,
   RefreshControl,
-  ScrollView,
+  FlatList,
   StyleSheet,
   Text,
   TextInput,
@@ -62,7 +62,7 @@ function GradientAvatar({
             justifyContent: 'center'
           }}>
             <ExpoImage
-              source={avatarSource || require('@/assets/images/sydney.jpg')}
+              source={avatarSource || require('@/assets/images/avatar-placeholder.png')}
               style={{ width: size, height: size, borderRadius: size / 2 }}
               contentFit="cover"
             />
@@ -70,7 +70,7 @@ function GradientAvatar({
         </LinearGradient>
       ) : (
         <ExpoImage
-          source={avatarSource || require('@/assets/images/sydney.jpg')}
+          source={avatarSource || require('@/assets/images/avatar-placeholder.png')}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           contentFit="cover"
         />
@@ -370,7 +370,7 @@ export default function ChatsScreen() {
             matchedAt: user.matched_at ? new Date(user.matched_at) : undefined,
             avatar: user.avatar
               ? { uri: user.avatar }
-              : require('@/assets/images/sydney.jpg'), // Fallback avatar
+              : require('@/assets/images/avatar-placeholder.png'), // Fallback avatar
           };
         });
 
@@ -441,117 +441,68 @@ export default function ChatsScreen() {
     const userIds = chats.map(chat => chat.id);
     if (userIds.length === 0) return;
 
-    // Subscribe to changes in user_online_status table for all matched users
-    // Create separate subscriptions for each user (Supabase postgres_changes doesn't support 'in' filter)
-    const channels: any[] = [];
+    // Helper: resolve online status from row data
+    const resolveStatus = (isOnline: boolean, lastSeen: string | null): boolean => {
+      if (!lastSeen) return isOnline;
+      const diffMinutes = (Date.now() - new Date(lastSeen).getTime()) / 60000;
+      return isOnline && diffMinutes < 5;
+    };
 
-    userIds.forEach((userId) => {
-      const channel = supabase
-        .channel(`online_status:${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'user_online_status',
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload) => {
-            // Handle both INSERT and UPDATE events
-            const statusData = payload.new || payload.old;
-            if (statusData && typeof statusData === 'object' && 'user_id' in statusData && 'is_online' in statusData) {
-              const updatedUserId = (statusData as any).user_id;
-              const isOnline = (statusData as any).is_online as boolean;
-              const lastSeen = (statusData as any).last_seen;
+    // Helper: apply a status update to all three state slices at once
+    const applyStatusUpdate = (userId: string, status: boolean) => {
+      setOnlineStatus((prev) => { const m = new Map(prev); m.set(userId, status); return m; });
+      setChats((prev) => prev.map((c) => c.id === userId ? { ...c, isOnline: status } : c));
+      setFilteredChats((prev) => prev.map((c) => c.id === userId ? { ...c, isOnline: status } : c));
+    };
 
-              // Check if user was online in the last 5 minutes
-              let actualOnlineStatus = isOnline;
-              if (lastSeen) {
-                const lastSeenDate = new Date(lastSeen);
-                const now = new Date();
-                const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / 60000;
-                actualOnlineStatus = isOnline && diffMinutes < 5;
-              }
-
-              setOnlineStatus((prev) => {
-                const newMap = new Map(prev);
-                newMap.set(updatedUserId, actualOnlineStatus);
-                return newMap;
-              });
-
-              // Update chats state with new online status
-              setChats((prevChats) =>
-                prevChats.map((chat) =>
-                  chat.id === updatedUserId ? { ...chat, isOnline: actualOnlineStatus } : chat
-                )
-              );
-              setFilteredChats((prevChats) =>
-                prevChats.map((chat) =>
-                  chat.id === updatedUserId ? { ...chat, isOnline: actualOnlineStatus } : chat
-                )
-              );
-            } else {
-              console.warn('⚠️ Invalid payload structure:', payload);
-            }
-          }
-        )
-        .subscribe();
-
-      channels.push(channel);
-    });
-
-    // Also periodically refresh online status (every 30 seconds) as a backup
-    const refreshInterval = setInterval(async () => {
-      for (const userId of userIds) {
-        try {
-          const { data, error } = await supabase
-            .from('user_online_status')
-            .select('is_online, last_seen')
-            .eq('user_id', userId)
-            .single();
-
-          if (!error && data) {
-            const isOnline = data.is_online;
-            const lastSeen = data.last_seen;
-
-            // Check if user was online in the last 5 minutes
-            let actualOnlineStatus = isOnline;
-            if (lastSeen) {
-              const lastSeenDate = new Date(lastSeen);
-              const now = new Date();
-              const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / 60000;
-              actualOnlineStatus = isOnline && diffMinutes < 5;
-            }
-
-            setOnlineStatus((prev) => {
-              const newMap = new Map(prev);
-              newMap.set(userId, actualOnlineStatus);
-              return newMap;
-            });
-
-            // Update chats state with new online status
-            setChats((prevChats) =>
-              prevChats.map((chat) =>
-                chat.id === userId ? { ...chat, isOnline: actualOnlineStatus } : chat
-              )
-            );
-            setFilteredChats((prevChats) =>
-              prevChats.map((chat) =>
-                chat.id === userId ? { ...chat, isOnline: actualOnlineStatus } : chat
-              )
-            );
-          }
-        } catch (error) {
-          console.error(`Error refreshing online status for user ${userId}:`, error);
+    // Use a SINGLE shared channel that listens to all user_online_status changes.
+    // The previous approach created one channel per matched user — with 30 matches
+    // that was 30 channels, hitting Supabase channel limits and causing silent
+    // real-time drops. A single channel with client-side filtering is equivalent
+    // and uses exactly 1 connection regardless of match count.
+    const userIdSet = new Set(userIds);
+    const onlineChannel = supabase
+      .channel(`online_status_bulk:${userIds.slice(0, 5).join('_')}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_online_status',
+        },
+        (payload) => {
+          const statusData = (payload.new || payload.old) as any;
+          if (!statusData || !('user_id' in statusData) || !('is_online' in statusData)) return;
+          const userId = statusData.user_id as string;
+          // Client-side filter — only update users in our matched list
+          if (!userIdSet.has(userId)) return;
+          applyStatusUpdate(userId, resolveStatus(statusData.is_online, statusData.last_seen ?? null));
         }
+      )
+      .subscribe();
+
+    // Periodic backup refresh: single batch query instead of N individual queries.
+    // Replaces the previous loop that fired one .single() per user every 30s.
+    const refreshInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_online_status')
+          .select('user_id, is_online, last_seen')
+          .in('user_id', userIds);
+
+        if (error || !data) return;
+
+        for (const row of data) {
+          applyStatusUpdate(row.user_id, resolveStatus(row.is_online, row.last_seen ?? null));
+        }
+      } catch (err) {
+        console.error('Error refreshing online status batch:', err);
       }
-    }, 30 * 1000); // Every 30 seconds
+    }, 30 * 1000);
 
     return () => {
       clearInterval(refreshInterval);
-      channels.forEach((channel) => {
-        supabase.removeChannel(channel);
-      });
+      supabase.removeChannel(onlineChannel);
     };
   }, [chats.length, chats.map(c => c.id).sort().join(',')]);
 
@@ -914,50 +865,47 @@ export default function ChatsScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
+        <FlatList
           style={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          data={filteredChats}
+          keyExtractor={(item, index) => `${item.isPinned ? 'pinned' : 'recent'}-${item.id}-${index}`}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />
           }
-        >
-          {/* Messages Heading */}
-          <View style={styles.messagesHeader}>
-            <Text style={styles.messagesTitle}>Messages</Text>
-          </View>
-
-          {/* Chat List */}
-          {loading ? (
-            <View style={styles.emptyContainer}>
-              <ActivityIndicator size="large" color="#A855F7" />
-              <Text style={[styles.emptyText, { marginTop: 14 }]}>Loading chats...</Text>
+          ListHeaderComponent={
+            <View style={styles.messagesHeader}>
+              <Text style={styles.messagesTitle}>Messages</Text>
             </View>
-          ) : filteredChats.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <MaterialIcons name="chat-bubble-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
-              <Text style={styles.emptyText}>
-                {searchQuery.trim() ? 'No matches found' : 'No matches yet'}
-              </Text>
-              <Text style={styles.emptySubtext}>
-                {searchQuery.trim()
-                  ? 'Try a different search term'
-                  : 'Start matching to see conversations here'}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.chatsContainer}>
-              {pinnedChats.map((chat, index) => (
-                <ChatItemComponent key={`pinned-${chat.id}-${index}`} chat={chat} onLongPress={handleLongPress} />
-              ))}
-              {recentChats.map((chat, index) => (
-                <ChatItemComponent key={`recent-${chat.id}-${index}`} chat={chat} onLongPress={handleLongPress} />
-              ))}
-            </View>
+          }
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.emptyContainer}>
+                <ActivityIndicator size="large" color="#A855F7" />
+                <Text style={[styles.emptyText, { marginTop: 14 }]}>Loading chats...</Text>
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="chat-bubble-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
+                <Text style={styles.emptyText}>
+                  {searchQuery.trim() ? 'No matches found' : 'No matches yet'}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {searchQuery.trim()
+                    ? 'Try a different search term'
+                    : 'Start matching to see conversations here'}
+                </Text>
+              </View>
+            )
+          }
+          renderItem={({ item }) => (
+            <ChatItemComponent chat={item} onLongPress={handleLongPress} />
           )}
-
-          {/* Bottom spacing for tab bar */}
-          <View style={{ height: 100 }} />
-        </ScrollView>
+          ListFooterComponent={<View style={{ height: 100 }} />}
+        />
 
         {/* Options Modal */}
         <Modal
