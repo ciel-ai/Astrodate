@@ -187,6 +187,20 @@ export async function fetchAllRegisteredUsers() {
       }
     }
 
+    // Fetch IDs the current user has already acted on
+    const actedUserIds = new Set<string>();
+    if (currentUserId) {
+      const { data: swipes } = await supabase
+        .from('swipe_actions')
+        .select('target_user_id')
+        .eq('user_id', currentUserId);
+      if (swipes) {
+        for (const s of swipes as any[]) {
+          if (s.target_user_id) actedUserIds.add(s.target_user_id);
+        }
+      }
+    }
+
     const registeredUsers: FinalMatchResult[] = [];
 
     for (const p of profileList) {

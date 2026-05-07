@@ -579,7 +579,7 @@ export default function LikesScreen() {
           style={styles.chatbotFab}
         >
           <LottieView
-            source={require('@/assets/images/Robot says hello.json')}
+            source={require('@/assets/images/robot-says-hello.json')}
             autoPlay
             loop
             style={styles.chatbotLottie}

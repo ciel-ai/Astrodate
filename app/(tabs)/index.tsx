@@ -1597,7 +1597,7 @@ export default function DiscoverScreen() {
                       activeOpacity={0.3}
                     >
                       <LottieView
-                        source={require('@/assets/images/Robot says hello.json')}
+                        source={require('@/assets/images/robot-says-hello.json')}
                         autoPlay
                         loop
                         style={styles.chatbotLottie}
@@ -1968,8 +1968,8 @@ export default function DiscoverScreen() {
                   <View style={styles.compSparkBarContainer}>
                     <View style={[styles.compSparkBarFill, {
                       width: `${(compProfile as any)?.indian_score ?
-                          ((compProfile as any).indian_score <= 36 ? Math.round(((compProfile as any).indian_score / 36) * 100) : (compProfile as any).indian_score)
-                          : 0
+                        ((compProfile as any).indian_score <= 36 ? Math.round(((compProfile as any).indian_score / 36) * 100) : (compProfile as any).indian_score)
+                        : 0
                         }%`
                     }]} />
                   </View>

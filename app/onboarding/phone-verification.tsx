@@ -105,7 +105,7 @@ export default function PhoneVerificationScreen() {
       if (error) {
         // Log error for debugging (not shown to user)
         console.error('OTP verification error:', error);
-        
+
         // Show user-friendly alert message
         let errorMessage = 'Invalid OTP. Please check the code and try again.';
         if (error.message?.includes('expired') || error.message?.includes('Expired')) {
@@ -115,7 +115,7 @@ export default function PhoneVerificationScreen() {
         } else if (error.message?.includes('rate limit') || error.message?.includes('too many')) {
           errorMessage = 'Too many attempts. Please wait a moment and try again.';
         }
-        
+
         Alert.alert('Verification Failed', errorMessage);
         // Clear OTP on error
         setOtp(['', '', '', '', '', '']);
@@ -123,7 +123,17 @@ export default function PhoneVerificationScreen() {
         return;
       }
 
-      if (data?.session && data?.user) {
+      // verifyOtp may not return session directly — fall back to getSession()
+      let session = data?.session;
+      let user = data?.user;
+
+      if (!session || !user) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        session = sessionData?.session ?? null;
+        user = sessionData?.session?.user ?? null;
+      }
+
+      if (session && user) {
         // Success - user is authenticated, navigate to main app
         router.replace('/(tabs)');
       } else {
@@ -265,39 +275,39 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     alignItems: 'center',
   },
-  headerRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 12, 
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginBottom: 24,
   },
-  logo: { 
-    width: 56, 
-    height: 56, 
+  logo: {
+    width: 56,
+    height: 56,
     borderRadius: 28,
   },
-  appTitle: { 
-    color: COLORS.textPrimary, 
-    fontSize: 22, 
+  appTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 22,
     fontWeight: '700',
   },
-  welcome: { 
-    color: COLORS.textPrimary, 
-    fontSize: 28, 
-    fontWeight: '700', 
+  welcome: {
+    color: COLORS.textPrimary,
+    fontSize: 28,
+    fontWeight: '700',
     marginBottom: 12,
     textAlign: 'center',
   },
-  subtitle: { 
-    color: COLORS.textSecondary, 
+  subtitle: {
+    color: COLORS.textSecondary,
     fontSize: 15,
     textAlign: 'center',
     marginBottom: 8,
   },
-  phoneNumber: { 
-    color: COLORS.accent, 
-    fontSize: 17, 
-    fontWeight: '600', 
+  phoneNumber: {
+    color: COLORS.accent,
+    fontSize: 17,
+    fontWeight: '600',
     marginBottom: 32,
     textAlign: 'center',
   },
@@ -325,13 +335,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentSoft,
     borderWidth: 2,
   },
-  verifyButtonWrapper: { 
-    marginBottom: 24, 
+  verifyButtonWrapper: {
+    marginBottom: 24,
     width: '100%',
   },
-  verifyButton: { 
-    paddingVertical: 16, 
-    borderRadius: 40, 
+  verifyButton: {
+    paddingVertical: 16,
+    borderRadius: 40,
     alignItems: 'center',
     backgroundColor: COLORS.accent,
     shadowColor: COLORS.accent,
@@ -340,23 +350,23 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  verifyButtonDisabled: { 
+  verifyButtonDisabled: {
     opacity: 0.5,
   },
-  verifyButtonText: { 
-    color: COLORS.background, 
-    fontWeight: '700', 
+  verifyButtonText: {
+    color: COLORS.background,
+    fontWeight: '700',
     fontSize: 16,
   },
-  resendContainer: { 
+  resendContainer: {
     alignItems: 'center',
   },
-  resendText: { 
-    color: COLORS.textSecondary, 
-    fontSize: 14, 
+  resendText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
     marginBottom: 8,
   },
-  resendButton: { 
+  resendButton: {
     minWidth: 140,
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -364,9 +374,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accentSoft,
     alignItems: 'center',
   },
-  resendButtonText: { 
-    color: COLORS.accentLight, 
-    fontWeight: '600', 
+  resendButtonText: {
+    color: COLORS.accentLight,
+    fontWeight: '600',
     fontSize: 15,
   },
   resendButtonDisabled: {

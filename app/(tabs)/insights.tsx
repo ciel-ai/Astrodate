@@ -56,7 +56,7 @@ export default function InsightsScreen() {
       setError(null);
 
       const birthDetails = await getBirthDetails();
-      
+
       if (!birthDetails) {
         setError('Please complete your birth details in onboarding to view your daily horoscope.');
         return;
@@ -66,7 +66,7 @@ export default function InsightsScreen() {
       const tob = new Date(birthDetails.tob);
       const lat = parseFloat(birthDetails.lat);
       const lon = parseFloat(birthDetails.lng);
-      
+
       // Calculate timezone offset
       const timezoneHours = parseFloat(birthDetails.tz.replace('UTC', '').replace('+', '')) || 0;
 
@@ -145,7 +145,7 @@ export default function InsightsScreen() {
     ];
 
     const categories: { key: string; value: any }[] = [];
-    
+
     // First, check if prediction itself is an object with categories
     if (data.prediction && typeof data.prediction === 'object' && !Array.isArray(data.prediction)) {
       for (const key in data.prediction) {
@@ -153,9 +153,9 @@ export default function InsightsScreen() {
           data.prediction.hasOwnProperty(key) &&
           data.prediction[key] !== null &&
           data.prediction[key] !== '' &&
-          (categoryKeys.includes(key.toLowerCase()) || 
-           (!metadataKeys.includes(key.toLowerCase()) && 
-            (typeof data.prediction[key] === 'string' || Array.isArray(data.prediction[key]))))
+          (categoryKeys.includes(key.toLowerCase()) ||
+            (!metadataKeys.includes(key.toLowerCase()) &&
+              (typeof data.prediction[key] === 'string' || Array.isArray(data.prediction[key]))))
         ) {
           categories.push({ key, value: data.prediction[key] });
         }
@@ -209,26 +209,26 @@ export default function InsightsScreen() {
 
   const formatHoroscopeText = (text: any): string => {
     if (!text) return 'Horoscope data not available.';
-    
+
     // Helper function to extract text from nested objects/arrays
     const extractTextFromObject = (obj: any, depth = 0): string => {
       if (depth > 3) return ''; // Prevent infinite recursion
-      
+
       if (typeof obj === 'string') {
         return obj;
       }
-      
+
       if (typeof obj === 'number' || typeof obj === 'boolean') {
         return String(obj);
       }
-      
+
       if (Array.isArray(obj)) {
         return obj
           .map((item) => extractTextFromObject(item, depth + 1))
           .filter((item) => item.trim().length > 0)
           .join('\n\n');
       }
-      
+
       if (typeof obj === 'object' && obj !== null) {
         // Try common text property names first
         const textKeys = ['text', 'content', 'message', 'description', 'prediction', 'horoscope', 'insight'];
@@ -237,7 +237,7 @@ export default function InsightsScreen() {
             return obj[key];
           }
         }
-        
+
         // If no direct text property, try to combine all string values
         const stringValues: string[] = [];
         for (const key in obj) {
@@ -261,22 +261,22 @@ export default function InsightsScreen() {
             }
           }
         }
-        
+
         if (stringValues.length > 0) {
           return stringValues.join('\n\n');
         }
       }
-      
+
       return '';
     };
-    
+
     // Try to parse if it's a JSON string
     let parsed: any = text;
     if (typeof text === 'string') {
       // Check if it looks like JSON
       const trimmed = text.trim();
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
         try {
           parsed = JSON.parse(text);
         } catch (e) {
@@ -287,10 +287,10 @@ export default function InsightsScreen() {
         parsed = text;
       }
     }
-    
+
     // Extract and format the text
     let formattedText = extractTextFromObject(parsed);
-    
+
     // If extraction failed, try string conversion
     if (!formattedText || formattedText.trim().length === 0) {
       if (typeof parsed === 'string') {
@@ -299,7 +299,7 @@ export default function InsightsScreen() {
         formattedText = JSON.stringify(parsed, null, 2);
       }
     }
-    
+
     // Clean up the text
     formattedText = formattedText
       .replace(/\n{3,}/g, '\n\n') // Replace 3+ newlines with 2
@@ -309,7 +309,7 @@ export default function InsightsScreen() {
       .replace(/\n\s+/g, '\n') // Remove leading spaces on new lines
       .replace(/\s+\n/g, '\n') // Remove trailing spaces before newlines
       .trim();
-    
+
     return formattedText;
   };
 
@@ -376,7 +376,7 @@ export default function InsightsScreen() {
               <View style={styles.horoscopeCard}>
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Today's Prediction</Text>
-                
+
                 </View>
                 {renderCategoryPredictions(horoscope) || (
                   <View style={styles.section}>
@@ -401,7 +401,7 @@ export default function InsightsScreen() {
           ) : null}
         </ScrollView>
       </SafeAreaView>
-      
+
       {/* Floating Chatbot Icon */}
       <TouchableOpacity
         onPress={() => router.push('/chatbot')}
@@ -409,7 +409,7 @@ export default function InsightsScreen() {
         style={styles.chatbotFab}
       >
         <LottieView
-          source={require('@/assets/images/Robot says hello.json')}
+          source={require('@/assets/images/robot-says-hello.json')}
           autoPlay
           loop
           style={styles.chatbotLottie}
