@@ -5,8 +5,8 @@ export interface Match {
   user1_id: string;
   user2_id: string;
   channel_id: string;
-  matched_at: string;
-  created_at: string;
+  matched_at: string | null;
+  created_at: string | null;
 }
 
 /**

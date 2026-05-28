@@ -357,7 +357,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding/login" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding/onboarding_ques" options={{ headerShown: false }} />
-            <Stack.Screen name="profile-details" options={{ headerShown: false, animation: 'fade', gestureEnabled: true }} />
+            <Stack.Screen name="profile-details/index" options={{ headerShown: false, animation: 'fade', gestureEnabled: true }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             <Stack.Screen name="onboarding/signup" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding/otp-verify" options={{ headerShown: false }} />
@@ -372,7 +372,7 @@ export default function RootLayout() {
             <Stack.Screen name="onboarding/email-login" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding/email-verify-pending" options={{ headerShown: false }} />
             <Stack.Screen name="auth/verify" options={{ headerShown: false }} />
-            <Stack.Screen name="chat/[id]" options={{ headerShown: false, animation: 'slide_from_right' }} />
+            <Stack.Screen name="chat/[id]/index" options={{ headerShown: false, animation: 'slide_from_right' }} />
             <Stack.Screen name="chatbot" options={{ headerShown: false }} />
             <Stack.Screen name="filters" options={{ headerShown: false }} />
             <Stack.Screen name="settings" options={{ headerShown: false }} />

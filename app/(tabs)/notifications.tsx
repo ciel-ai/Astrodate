@@ -21,7 +21,7 @@ type NotificationItem = {
   type: 'new_match' | 'new_message' | 'new_like' | 'new_superlike' | 'marketing';
   title: string;
   body: string;
-  created_at: string | null;
+  created_at: string;
   status: string;
   payload: {
     sender_id?: string;
@@ -43,8 +43,7 @@ const STAR_DATA = Array.from({ length: 60 }).map((_, i) => ({
   opacity: Math.random() * 0.5 + 0.1,
 }));
 
-function timeAgo(dateStr: string | null): string {
-  if (!dateStr) return 'just now';
+function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
@@ -177,9 +176,9 @@ export default function NotificationsScreen() {
           type: 'new_match',
           title: '🎉 New Match!',
           body: senderName ? `You and ${senderName} liked each other` : 'You have a new match',
-          created_at: m.created_at,
+          created_at: m.created_at ?? new Date().toISOString(),
           status: 'sent',
-          payload: { sender_id: otherId, match_id: m.id },
+          payload: { sender_id: otherId, match_id: m.id ?? undefined },
           senderPhoto,
           senderName,
         });
@@ -203,26 +202,22 @@ export default function NotificationsScreen() {
         } catch { /* ignore */ }
 
         items.push({
-          id: `like-${l.id}`,
+          id: `like-${l.id ?? Math.random()}`,
           type,
           title: l.action_type === 'super_like' ? '⭐ Superlike!' : '💜 Someone liked you',
           body: senderName
             ? `${senderName} ${l.action_type === 'super_like' ? 'superliked' : 'liked'} you`
             : 'Someone liked your profile',
-          created_at: l.created_at,
+          created_at: l.created_at ?? new Date().toISOString(),
           status: 'sent',
-          payload: { sender_id: l.user_id },
+          payload: { sender_id: l.user_id ?? undefined },
           senderPhoto,
           senderName,
         });
       }
 
       // Sort by date
-      items.sort((a, b) => {
-        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return bTime - aTime;
-      });
+      items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setNotifications(items);
     } catch (e) {
       console.error('[notifications fallback] error:', e);
@@ -317,8 +312,8 @@ export default function NotificationsScreen() {
   // Group into Today / Earlier
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const todayItems = notifications.filter(n => n.created_at && new Date(n.created_at) >= today);
-  const earlierItems = notifications.filter(n => n.created_at && new Date(n.created_at) < today);
+  const todayItems = notifications.filter(n => new Date(n.created_at) >= today);
+  const earlierItems = notifications.filter(n => new Date(n.created_at) < today);
 
   const grouped = [
     ...(todayItems.length ? [{ type: 'header', label: 'Today', id: 'h-today' }, ...todayItems] : []),

@@ -114,7 +114,7 @@ export default function EmailLoginScreen() {
       if (!isMountedRef.current) return;
 
       if (!result.success) {
-        showAlert('Login Failed', result.error);
+        showAlert('Login Failed', result.error ?? 'An error occurred');
         return;
       }
 

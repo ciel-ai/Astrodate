@@ -1,1 +1,1 @@
-export { default } from './components/ProfileDetailsScreen';
+export { default } from '@/components/profile-details/ProfileDetailsScreen';

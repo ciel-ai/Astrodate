@@ -59,8 +59,8 @@ export const getAllUsers = async (): Promise<{ success: boolean; data?: User[]; 
     filteredMatches.forEach((match) => {
       const otherUserId = getOtherUserIdFromMatch(match, currentUserId);
       matchInfoMap.set(otherUserId, { 
-        channelId: match.channel_id, 
-        matchedAt: match.matched_at 
+        channelId: match.channel_id ?? '', 
+        matchedAt: match.matched_at ?? new Date().toISOString()
       });
     });
 
@@ -110,8 +110,8 @@ export const getAllUsers = async (): Promise<{ success: boolean; data?: User[]; 
       photosResult.data.forEach((photo) => {
         // If map already has a photo for this user, don't overwrite it
         // Since we ordered by is_primary DESC, the first one we see is the primary
-        if (!photoMap.has(photo.user_id)) {
-          photoMap.set(photo.user_id, photo.photo_url);
+        if (photo.user_id && !photoMap.has(photo.user_id)) {
+          photoMap.set(photo.user_id, photo.photo_url ?? '');
         }
       });
     }
@@ -198,4 +198,3 @@ export const getUserById = async (userId: string): Promise<{ success: boolean; d
     };
   }
 };
-

@@ -635,14 +635,22 @@ export default function DiscoverScreen() {
       const interest = section1Response.success && section1Response.data?.interest ? section1Response.data.interest : undefined;
       setCurrentUserInterest(interest);
 
-      const filteredHighQualityMatches = highQualityMatches
+      // Normalize null → undefined to satisfy FinalMatchResult type
+      const normalizedMatches: FinalMatchResult[] = highQualityMatches.map((u: any) => ({
+        ...u,
+        personality_vector: u.personality_vector ?? undefined,
+        indian_recommendation: u.indian_recommendation ?? undefined,
+        western_report: u.western_report ?? undefined,
+      }));
+
+      const filteredHighQualityMatches = normalizedMatches
         .filter((u: FinalMatchResult) => !reportedSet.has(String(u.match_user_id || '')))
         .filter((u: FinalMatchResult) => candidateMatchesInterest(u, interest))
         .filter((u: FinalMatchResult) => candidateWithinDiscoveryPreferences(u, discoveryPrefs));
 
       const baseHighQualityMatches = filteredHighQualityMatches.length > 0
         ? filteredHighQualityMatches
-        : highQualityMatches
+        : normalizedMatches
           .filter((u: FinalMatchResult) => !reportedSet.has(String(u.match_user_id || '')))
           .filter((u: FinalMatchResult) => candidateWithinDiscoveryPreferences(u, discoveryPrefs));
 
@@ -877,7 +885,7 @@ export default function DiscoverScreen() {
     await checkMutualLike(chatUserId);
 
     router.push({
-      pathname: '/chat/[id]' as any,
+      pathname: '/chat/[id]/index' as any,
       params: { id: chatUserId },
     });
   }, [matchedProfile, matchedUserId, router]);

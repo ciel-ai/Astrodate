@@ -275,6 +275,7 @@ export async function getUserMatches(): Promise<{
     // Map the results to include the other user's ID
     const matches = (data || []).map((match) => ({
       ...match,
+      matched_at: match.matched_at ?? new Date().toISOString(),
       other_user_id: match.user1_id === userId ? match.user2_id : match.user1_id,
     }));
 

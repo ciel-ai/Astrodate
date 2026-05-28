@@ -1,7 +1,10 @@
+import { getIcebreakerForMatch } from '@/lib/icebreaker';
 import { deleteMatch, getMatch } from '@/lib/matches';
 import { deleteMessages, getMessages, markMessagesAsReadDebounced, sendMessage } from '@/lib/messages';
 import { getOnlineStatus } from '@/lib/online-status';
 import { createReport, isUserReportedInChannel } from '@/lib/reports';
+import { releaseRealtimeChannel, trackRealtimeChannel } from '@/lib/realtime-channels';
+import { signalMessageReplied, signalMessageSent } from '@/lib/signals';
 import { supabase } from '@/lib/supabase';
 import { broadcastTypingStatus, cleanupTypingSubscriptions, subscribeToTypingStatus } from '@/lib/typing-status';
 import { deleteUserLikes } from '@/lib/user-likes';
@@ -10,13 +13,13 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 // Use legacy FS to avoid deprecation crash on some Android builds
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   Image,
   KeyboardAvoidingView,
@@ -31,6 +34,10 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { TypingIndicator } from '@/components/chat/TypingIndicator';
+import { useChatRouteParams } from '@/hooks/useChatRouteParams';
+import { cleanupChatChannels, removeChatChannelsByTopicPrefix } from '@/lib/chatRealtimeManager';
 
 type Message = {
   id: string;
@@ -39,6 +46,74 @@ type Message = {
   timestamp: Date;
   isRead: boolean;
 };
+
+type MessageRowProps = {
+  message: Message;
+  currentUserId: string;
+  avatar: any;
+};
+
+const formatMessageTime = (date: Date) => {
+  try {
+    if (!date || isNaN(date.getTime())) return '';
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+  } catch {
+    return '';
+  }
+};
+
+const MessageRow = memo(function MessageRow({ message, currentUserId, avatar }: MessageRowProps) {
+  const isMyMessage = message.senderId === currentUserId;
+  const messageTime = useMemo(() => formatMessageTime(message.timestamp), [message.timestamp]);
+
+  return (
+    <View
+      style={[
+        styles.messageContainer,
+        isMyMessage ? styles.myMessageContainer : styles.theirMessageContainer,
+      ]}>
+      {!isMyMessage && (
+        <Image source={avatar} style={styles.messageAvatar} />
+      )}
+      <View
+        style={[
+          styles.messageBubble,
+          isMyMessage ? styles.myMessageBubble : styles.theirMessageBubble,
+        ]}>
+        <Text
+          style={[
+            styles.messageText,
+            isMyMessage ? styles.myMessageText : styles.theirMessageText,
+          ]}>
+          {message.text}
+        </Text>
+        <View style={styles.messageFooter}>
+          <Text style={styles.messageTime}>{messageTime}</Text>
+          {isMyMessage && (
+            <MaterialIcons
+              name={message.isRead ? 'done-all' : 'done'}
+              size={14}
+              color={message.isRead ? '#A855F7' : 'rgba(255, 255, 255, 0.5)'}
+              style={styles.readIndicator}
+            />
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}, (prev, next) => (
+  prev.currentUserId === next.currentUserId &&
+  prev.avatar === next.avatar &&
+  prev.message.id === next.message.id &&
+  prev.message.text === next.message.text &&
+  prev.message.senderId === next.message.senderId &&
+  prev.message.isRead === next.message.isRead &&
+  prev.message.timestamp.getTime() === next.message.timestamp.getTime()
+));
 
 // Helper to get avatar source
 const getAvatarSource = (avatarUrl: string | null | undefined) => {
@@ -69,7 +144,7 @@ function ChatTypingIndicator() {
 }
 
 export default function ChatDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { chatId } = useChatRouteParams();
   const router = useRouter();
   const navigation = useNavigation();
   const [messageText, setMessageText] = useState('');
@@ -77,18 +152,25 @@ export default function ChatDetailScreen() {
   const [user, setUser] = useState<{ name: string; avatar: any; isOnline: boolean } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
-  const chatId = id || '';
   const [sending, setSending] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [inputBarHeight, setInputBarHeight] = useState(64);
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const [isMatched, setIsMatched] = useState<boolean | null>(null); // null = checking, true = matched, false = not matched
   const [channelId, setChannelId] = useState<string>('');
+  const [icebreaker, setIcebreaker] = useState<string | null>(null);
+  const [icebreakerDismissed, setIcebreakerDismissed] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const typingChannels = useRef<any[]>([]);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingBroadcastRef = useRef(0);
+  const scrollTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const isMountedRef = useRef(true);
+  const hasSignaledMessageSent = useRef(false);
+  const hasSignaledMessageReplied = useRef(false);
 
   // Menu and modal states
   const [showMenuModal, setShowMenuModal] = useState(false);
@@ -117,6 +199,7 @@ export default function ChatDetailScreen() {
   const [reportDetails, setReportDetails] = useState<string>('');
   const [reportSaved, setReportSaved] = useState<boolean>(false);
   const [showReportConfirmationModal, setShowReportConfirmationModal] = useState(false);
+  const { showAlert } = useAuthAlert();
 
   // Hide the default Expo Router header
   useLayoutEffect(() => {
@@ -125,12 +208,23 @@ export default function ChatDetailScreen() {
     });
   }, [navigation]);
 
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Get current user ID (online status is now managed globally in _layout.tsx)
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (user && !error) {
+        const userResult = await supabase.auth.getUser();
+        const user = userResult?.data?.user;
+        const error = userResult?.error;
+        if (user && !error && isMountedRef.current) {
           setCurrentUserId(user.id);
         }
       } catch (error) {
@@ -142,17 +236,22 @@ export default function ChatDetailScreen() {
 
   // Verify match and fetch user data and online status from backend
   useEffect(() => {
+    let isMounted = true;
     const fetchUser = async () => {
       if (!chatId) {
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
       }
 
-      setLoading(true);
-      setIsMatched(null); // Reset match status
+      if (isMounted) {
+        setLoading(true);
+        setIsMatched(null); // Reset match status
+      }
       try {
         // First, verify that users are matched
         const matchResult = await getMatch(chatId);
+        if (!isMounted) return;
+
         if (!matchResult.success || !matchResult.data) {
           console.error('❌ Users are not matched');
           setIsMatched(false);
@@ -171,12 +270,22 @@ export default function ChatDetailScreen() {
           setChannelId(matchResult.data.channel_id);
         }
 
+        // Fetch pre-generated icebreaker (no Gemini call — reads from DB only)
+        if (matchResult.data.id) {
+          getIcebreakerForMatch(matchResult.data.id)
+            .then((text) => {
+              if (text && isMounted) setIcebreaker(text);
+            })
+            .catch(() => { });
+        }
+
         // If matched, fetch user data
         const [userResult, onlineResult] = await Promise.all([
           getUserById(chatId),
           getOnlineStatus(chatId),
         ]);
 
+        if (!isMounted) return;
         if (userResult.success && userResult.data) {
           setUser({
             name: userResult.data.full_name,
@@ -193,18 +302,23 @@ export default function ChatDetailScreen() {
         }
       } catch (error) {
         console.error('Error fetching user:', error);
-        setIsMatched(false);
-        setUser({
-          name: 'Unknown User',
-          avatar: require('@/assets/images/avatar-placeholder.png'),
-          isOnline: false,
-        });
+        if (isMounted) {
+          setIsMatched(false);
+          setUser({
+            name: 'Unknown User',
+            avatar: require('@/assets/images/avatar-placeholder.png'),
+            isOnline: false,
+          });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchUser();
+    return () => {
+      isMounted = false;
+    };
   }, [chatId]);
 
   const syncMessages = useCallback(async () => {
@@ -212,14 +326,19 @@ export default function ChatDetailScreen() {
 
     try {
       const result = await getMessages(chatId, channelId);
+      if (!isMountedRef.current) return;
+
       if (result.success && result.data) {
-        const uiMessages: Message[] = result.data.map((msg) => ({
-          id: msg.id,
-          text: msg.message_text,
-          senderId: msg.sender_id,
-          timestamp: new Date(msg.created_at),
-          isRead: msg.is_read,
-        }));
+        const uiMessages: Message[] = result.data.map((msg) => {
+          const ts = msg.created_at ? new Date(msg.created_at) : new Date();
+          return {
+            id: msg.id,
+            text: msg.message_text,
+            senderId: msg.sender_id,
+            timestamp: isNaN(ts.getTime()) ? new Date() : ts,
+            isRead: msg.is_read,
+          };
+        });
 
         setMessages(uiMessages);
         markMessagesAsReadDebounced(chatId, channelId);
@@ -235,11 +354,7 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     if (!chatId) return;
 
-    for (const existingChannel of supabase.getChannels()) {
-      if (existingChannel.topic.includes(`online_status:${chatId}`)) {
-        void supabase.removeChannel(existingChannel);
-      }
-    }
+    removeChatChannelsByTopicPrefix(supabase, `online_status:${chatId}`);
 
     const onlineStatusChannelName = `online_status:${chatId}:${Date.now()}`;
 
@@ -254,22 +369,25 @@ export default function ChatDetailScreen() {
           filter: `user_id=eq.${chatId}`,
         },
         (payload) => {
+          if (!isMountedRef.current) return;
           if (payload.new && typeof payload.new === 'object' && 'is_online' in payload.new) {
+            const nextOnline = (payload.new as any).is_online as boolean;
             setUser((prev) =>
-              prev
+              prev && prev.isOnline !== nextOnline
                 ? {
                   ...prev,
-                  isOnline: (payload.new as any).is_online as boolean,
+                  isOnline: nextOnline,
                 }
-                : null
+                : prev
             );
           }
         }
       )
       .subscribe();
+    trackRealtimeChannel(channel);
 
     return () => {
-      supabase.removeChannel(channel);
+      releaseRealtimeChannel(supabase, channel);
     };
   }, [chatId]);
 
@@ -299,11 +417,9 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     if (!currentUserId || !chatId || !channelId) return;
 
-    for (const existingChannel of supabase.getChannels()) {
-      if (existingChannel.topic.includes(`messages:${channelId}`)) {
-        void supabase.removeChannel(existingChannel);
-      }
-    }
+    let isActive = true;
+
+    removeChatChannelsByTopicPrefix(supabase, `messages:${channelId}`);
 
     const channels: any[] = [];
     const messageChannelName = `messages:${channelId}:${currentUserId}:${Date.now()}`;
@@ -322,43 +438,39 @@ export default function ChatDetailScreen() {
         },
         (payload) => {
           const newMessage = payload.new as any;
+          if (!isMountedRef.current) return;
 
           // Only process if it's for this conversation
           if (newMessage.channel_id === channelId &&
             (newMessage.sender_id === currentUserId || newMessage.receiver_id === currentUserId)) {
+            const insertTs = newMessage.created_at ? new Date(newMessage.created_at) : new Date();
             const uiMessage: Message = {
               id: newMessage.id,
               text: newMessage.message_text,
               senderId: newMessage.sender_id,
-              timestamp: new Date(newMessage.created_at),
+              timestamp: isNaN(insertTs.getTime()) ? new Date() : insertTs,
               isRead: newMessage.is_read,
             };
-
             setMessages((prev) => {
+              if (!hasSignaledMessageReplied.current && newMessage.sender_id !== currentUserId && prev.length > 0) {
+                hasSignaledMessageReplied.current = true;
+                signalMessageReplied(newMessage.sender_id);
+              }
+
               // Check if this exact message already exists (by ID)
               const messageExists = prev.some((m) => m.id === uiMessage.id);
               if (messageExists) {
                 return prev;
               }
 
-              // Remove any temp/optimistic message with same text and sender (in case it wasn't replaced)
-              const filtered = prev.filter((m) => {
-                const isTempMessage = m.id.startsWith('temp_');
-                const isSameText = m.text === uiMessage.text;
-                const isSameSender = m.senderId === uiMessage.senderId;
-                if (isTempMessage && isSameText && isSameSender) {
-                  return false;
-                }
-                return true;
-              });
-
-              return [...filtered, uiMessage];
+              return [...prev, uiMessage];
             });
 
             // Scroll to bottom
-            setTimeout(() => {
+            const scrollTimeout = setTimeout(() => {
               scrollViewRef.current?.scrollToEnd({ animated: true });
             }, 50);
+            scrollTimeoutsRef.current.push(scrollTimeout);
 
             // OPTIMIZED: Use debounced mark as read for received messages
             if (newMessage.receiver_id === currentUserId) {
@@ -377,21 +489,26 @@ export default function ChatDetailScreen() {
         },
         (payload) => {
           const updatedMessage = payload.new as any;
+          if (!isMountedRef.current) return;
           if (updatedMessage.channel_id === channelId) {
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === updatedMessage.id
-                  ? {
-                    ...msg,
-                    isRead: updatedMessage.is_read,
-                  }
-                  : msg
-              )
-            );
+            setMessages((prev) => {
+              let didChange = false;
+              const nextMessages = prev.map((msg) => {
+                if (msg.id !== updatedMessage.id) return msg;
+                if (msg.isRead === updatedMessage.is_read) return msg;
+                didChange = true;
+                return {
+                  ...msg,
+                  isRead: updatedMessage.is_read,
+                };
+              });
+              return didChange ? nextMessages : prev;
+            });
           }
         }
       )
       .subscribe((status) => {
+        if (!isMountedRef.current || !isActive) return;
         if (status === 'SUBSCRIBED') {
           setConnectionStatus('connected');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -399,12 +516,14 @@ export default function ChatDetailScreen() {
           void syncMessages();
         }
       });
+    trackRealtimeChannel(messageChannel);
     channels.push(messageChannel);
 
     return () => {
-      channels.forEach((channel) => {
-        supabase.removeChannel(channel);
-      });
+      isActive = false;
+      cleanupChatChannels(supabase, channels);
+      scrollTimeoutsRef.current.forEach(clearTimeout);
+      scrollTimeoutsRef.current = [];
     };
   }, [chatId, currentUserId, channelId, syncMessages]);
 
@@ -415,7 +534,8 @@ export default function ChatDetailScreen() {
     const typingStatusChannel = subscribeToTypingStatus(
       channelId,
       (isOtherUserTyping) => {
-        setIsOtherUserTyping(isOtherUserTyping);
+        if (!isMountedRef.current) return;
+        setIsOtherUserTyping((prev) => prev === isOtherUserTyping ? prev : isOtherUserTyping);
       },
       currentUserId
     );
@@ -436,17 +556,11 @@ export default function ChatDetailScreen() {
       // Release microphone lock if user navigates away mid-recording.
       // Without this, Android holds the mic open permanently until app restart,
       // blocking all other apps from using the microphone.
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => { });
-      }
-
-      // Clear typing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => { });
       }
     };
-  }, [chatId, currentUserId, channelId, user?.name]);
+  }, [currentUserId, chatId, channelId]);
 
   // Handle typing indicator - broadcast typing status to other user
   const handleTyping = useCallback(() => {
@@ -455,9 +569,13 @@ export default function ChatDetailScreen() {
     }
 
     // Broadcast typing status (non-blocking - don't await)
-    broadcastTypingStatus(currentUserId, channelId, true).catch((error) => {
+    const now = Date.now();
+    if (now - lastTypingBroadcastRef.current > 1200) {
+      lastTypingBroadcastRef.current = now;
+      broadcastTypingStatus(currentUserId, channelId, true).catch((error) => {
       console.error('❌ Error broadcasting typing status:', error);
-    });
+      });
+    }
 
     // Clear existing timeout
     if (typingTimeoutRef.current) {
@@ -466,16 +584,18 @@ export default function ChatDetailScreen() {
 
     // Set timeout to stop typing indicator after 3 seconds of inactivity
     typingTimeoutRef.current = setTimeout(() => {
+      lastTypingBroadcastRef.current = 0;
       broadcastTypingStatus(currentUserId, channelId, false).catch(() => { });
     }, 3000);
   }, [currentUserId, channelId]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  }, [messages]);
+    return () => clearTimeout(timeout);
+  }, [messages.length]);
 
   // Function to delete match and messages when unmatching (backend deletion)
   const handleUnmatchAndDelete = useCallback(async () => {
@@ -515,7 +635,7 @@ export default function ChatDetailScreen() {
           deleteMatchResult.status === 'rejected'
             ? deleteMatchResult.reason
             : deleteMatchResult.value.error);
-        alert('Failed to delete match. Please try again.');
+        showAlert('Error', 'Failed to delete match. Please try again.');
         return;
       }
 
@@ -526,7 +646,7 @@ export default function ChatDetailScreen() {
       router.replace('/(tabs)/chats');
     } catch (error) {
       console.error('❌ Error during unmatch/delete:', error);
-      alert('An error occurred while unmatching. Please try again.');
+      showAlert('Error', 'An error occurred while unmatching. Please try again.');
     }
   }, [chatId, currentUserId, router]);
 
@@ -551,7 +671,7 @@ export default function ChatDetailScreen() {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Permission Required',
           'Sorry, we need media library permissions to attach photos and videos.',
           [{ text: 'OK' }]
@@ -567,7 +687,7 @@ export default function ChatDetailScreen() {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Permission Required',
           'Sorry, we need camera permissions to take photos.',
           [{ text: 'OK' }]
@@ -590,15 +710,15 @@ export default function ChatDetailScreen() {
     try {
       setSending(true);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) {
         throw new Error('User not authenticated');
       }
 
       const uri = asset.uri;
       const contentType =
-        // @ts-ignore mimeType may exist on asset
-        asset.mimeType || (type === 'photo' ? 'image/jpeg' : 'video/mp4');
+        (asset as any).mimeType || (type === 'photo' ? 'image/jpeg' : 'video/mp4');
 
       // Derive extension
       const extFromMime =
@@ -633,9 +753,10 @@ export default function ChatDetailScreen() {
         throw uploadError;
       }
 
-      const { data: { publicUrl } } = supabase.storage
+      const publicUrlResult = supabase.storage
         .from('messages')
         .getPublicUrl(filePath);
+      const publicUrl = publicUrlResult?.data?.publicUrl;
 
       const prefix = type === 'photo' ? '📷 Photo' : '🎬 Video';
       const messageText = `${prefix}: ${publicUrl}`;
@@ -647,7 +768,7 @@ export default function ChatDetailScreen() {
 
     } catch (error) {
       console.error('❌ Error sending media:', error);
-      Alert.alert(
+      showAlert(
         'Error',
         `Failed to send ${type}: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -675,7 +796,7 @@ export default function ChatDetailScreen() {
       }
     } catch (error) {
       console.error('Error picking photo:', error);
-      Alert.alert('Error', 'Failed to pick photo. Please try again.');
+      showAlert('Error', 'Failed to pick photo. Please try again.');
     }
   };
 
@@ -698,7 +819,7 @@ export default function ChatDetailScreen() {
       }
     } catch (error) {
       console.error('Error picking video:', error);
-      Alert.alert('Error', 'Failed to pick video. Please try again.');
+      showAlert('Error', 'Failed to pick video. Please try again.');
     }
   };
 
@@ -708,7 +829,7 @@ export default function ChatDetailScreen() {
       try {
         const { status } = await Audio.requestPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert(
+          showAlert(
             'Permission Required',
             'Sorry, we need microphone permissions to record audio.',
             [{ text: 'OK' }]
@@ -749,6 +870,7 @@ export default function ChatDetailScreen() {
       });
       await newRecording.setProgressUpdateInterval(500);
 
+      recordingRef.current = newRecording;
       setRecording(newRecording);
       setIsRecording(true);
       setRecordingUri(null);
@@ -756,7 +878,7 @@ export default function ChatDetailScreen() {
 
     } catch (error) {
       console.error('Failed to start recording:', error);
-      Alert.alert('Error', 'Failed to start recording. Please try again.');
+      showAlert('Error', 'Failed to start recording. Please try again.');
     }
   };
 
@@ -768,6 +890,7 @@ export default function ChatDetailScreen() {
       setIsRecording(false);
 
       await recording.stopAndUnloadAsync();
+      recordingRef.current = null;
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
       });
@@ -778,7 +901,7 @@ export default function ChatDetailScreen() {
 
     } catch (error) {
       console.error('Failed to stop recording:', error);
-      Alert.alert('Error', 'Failed to stop recording.');
+      showAlert('Error', 'Failed to stop recording.');
     }
   };
 
@@ -795,6 +918,7 @@ export default function ChatDetailScreen() {
       }
     }
     setRecording(null);
+    recordingRef.current = null;
     setIsRecording(false);
     setRecordingUri(null);
     setRecordingDuration(0);
@@ -814,17 +938,21 @@ export default function ChatDetailScreen() {
         name: audioFileName,
       };
 
-      // Read file as blob
-      const response = await fetch(recordingUri);
-      const blob = await response.blob();
+      // Read file as base64 to avoid fetch(file://...) failures on Android
+      const base64Data = await FileSystem.readAsStringAsync(recordingUri, {
+        encoding: 'base64',
+      });
+      const dataUrl = `data:audio/m4a;base64,${base64Data}`;
+      const blob = await (await fetch(dataUrl)).blob();
 
       // Upload to Supabase storage
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      const filePath = `audio/${user.id}/${audioFileName}`;
+      const filePath = `audio/${user.id}/${Date.now()}_${audioFileName}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('messages')
         .upload(filePath, blob, {
@@ -836,9 +964,10 @@ export default function ChatDetailScreen() {
       }
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
+      const publicUrlResult = supabase.storage
         .from('messages')
         .getPublicUrl(filePath);
+      const publicUrl = publicUrlResult?.data?.publicUrl;
 
       // Send message with audio URL
       const audioMessageText = `🎤 Audio message: ${publicUrl}`;
@@ -855,7 +984,7 @@ export default function ChatDetailScreen() {
 
     } catch (error) {
       console.error('❌ Error sending audio:', error);
-      Alert.alert('Error', `Failed to send audio: ${error instanceof Error ? error.message : String(error)}`);
+      showAlert('Error', `Failed to send audio: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSending(false);
     }
@@ -888,7 +1017,7 @@ export default function ChatDetailScreen() {
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      showAlert('Error', 'Failed to take photo. Please try again.');
     }
   };
 
@@ -901,7 +1030,6 @@ export default function ChatDetailScreen() {
 
   // Cleanup recording on unmount using a ref so the closure always sees
   // the latest recording instance without re-registering the effect.
-  const recordingRef = useRef<Audio.Recording | null>(null);
   useEffect(() => {
     recordingRef.current = recording;
   }, [recording]);
@@ -922,7 +1050,7 @@ export default function ChatDetailScreen() {
       const res = await isUserReportedInChannel(channelId, currentUserId);
       if (res.success && res.reported) {
         setIsReportedAgainstMe(true);
-        Alert.alert(
+        showAlert(
           'Reported',
           'You have been reported in this chat. The conversation is no longer available.',
           [
@@ -937,11 +1065,11 @@ export default function ChatDetailScreen() {
     checkReported();
   }, [channelId, currentUserId, router]);
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = useCallback(async () => {
     if (!messageText.trim() || !currentUserId || !chatId || sending || isMatched !== true) return;
 
     const messageToSend = messageText.trim();
-    const tempId = `temp_${Date.now()}`;
+    const tempId = 'optimistic-' + Date.now();
 
     // Optimistic update - show message immediately
     const optimisticMessage: Message = {
@@ -968,28 +1096,39 @@ export default function ChatDetailScreen() {
       // OPTIMIZED: Pass channelId to avoid extra getMatch() call
       const result = await sendMessage(chatId, messageToSend, channelId);
 
+      if (result.success) {
+        if (!hasSignaledMessageSent.current) {
+          hasSignaledMessageSent.current = true;
+          signalMessageSent(chatId);
+        }
+      }
+
       if (!result.success) {
         console.error('❌ Failed to send message:', result.error);
         // Remove optimistic message and restore text
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         setMessageText(messageToSend);
-        alert(`Failed to send message: ${result.error}`);
+        showAlert('Error', `Failed to send message: ${result.error}`);
       } else {
         // Replace optimistic message with real one
         if (result.data) {
-          setMessages((prev) =>
-            prev.map((msg) =>
+          setMessages((prev) => {
+            const alreadyAdded = prev.some(m => m.id === result.data!.id);
+            if (alreadyAdded) {
+              return prev.filter(m => m.id !== tempId);
+            }
+            return prev.map((msg) =>
               msg.id === tempId
                 ? {
                   id: result.data!.id,
                   text: result.data!.message_text,
                   senderId: result.data!.sender_id,
-                  timestamp: new Date(result.data!.created_at),
+                  timestamp: result.data!.created_at ? new Date(result.data!.created_at) : new Date(),
                   isRead: result.data!.is_read,
                 }
                 : msg
-            )
-          );
+            );
+          });
         }
       }
     } catch (error) {
@@ -997,19 +1136,71 @@ export default function ChatDetailScreen() {
       // Remove optimistic message and restore text
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setMessageText(messageToSend);
-      alert(`Error sending message: ${error instanceof Error ? error.message : String(error)}`);
+      showAlert('Error', `Error sending message: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSending(false);
     }
-  };
+  }, [channelId, chatId, currentUserId, isMatched, messageText, sending, showAlert]);
 
-  const formatTime = (date: Date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-  };
+  const handleBackPress = useCallback(() => {
+    router.back();
+  }, [router]);
+
+  const handleOpenMenu = useCallback(() => {
+    setShowMenuModal(true);
+  }, []);
+
+  const handleContentSizeChange = useCallback(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  const handleInputLayout = useCallback((event: any) => {
+    const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+    if (nextHeight > 0) {
+      setInputBarHeight((prev) => prev === nextHeight ? prev : nextHeight);
+    }
+  }, []);
+
+  const handleMessageTextChange = useCallback((text: string) => {
+    setMessageText(text);
+    handleTyping();
+  }, [handleTyping]);
+
+  const handleUseIcebreaker = useCallback(() => {
+    if (!icebreaker) return;
+    setMessageText(icebreaker);
+    setIcebreakerDismissed(true);
+  }, [icebreaker]);
+
+  const handleDismissIcebreaker = useCallback(() => {
+    setIcebreakerDismissed(true);
+  }, []);
+
+  const messagesContentStyle = useMemo(
+    () => [styles.messagesContent, { paddingBottom: inputBarHeight + 12 }],
+    [inputBarHeight]
+  );
+
+  const isSendDisabled = useMemo(
+    () => !messageText.trim() || sending || isMatched !== true,
+    [isMatched, messageText, sending]
+  );
+  const sendIconColor = useMemo(
+    () => messageText.trim() ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)',
+    [messageText]
+  );
+
+  const renderedMessages = useMemo(
+    () => messages.map((message) => (
+      <MessageRow
+        key={`msg-${message.id}`}
+        message={message}
+        currentUserId={currentUserId}
+        avatar={user?.avatar}
+      />
+    )),
+    [messages, currentUserId, user?.avatar]
+  );
 
   if (loading || !user) {
     return (
@@ -1029,7 +1220,7 @@ export default function ChatDetailScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={handleBackPress}
             activeOpacity={0.7}>
             <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
@@ -1054,12 +1245,13 @@ export default function ChatDetailScreen() {
   }
 
   return (
+    <ErrorBoundary>
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={handleBackPress}
           activeOpacity={0.7}>
           <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -1071,7 +1263,7 @@ export default function ChatDetailScreen() {
           <View style={styles.headerText}>
             <Text style={styles.headerName}>{user.name}</Text>
             {isOtherUserTyping ? (
-              <ChatTypingIndicator />
+              <TypingIndicator />
             ) : connectionStatus === 'disconnected' ? (
               <Text style={styles.connectionWarning}>⚠️ Reconnecting...</Text>
             ) : user.isOnline ? (
@@ -1081,7 +1273,7 @@ export default function ChatDetailScreen() {
         </View>
         <TouchableOpacity
           style={styles.moreButton}
-          onPress={() => setShowMenuModal(true)}
+          onPress={handleOpenMenu}
           activeOpacity={0.7}>
           <MaterialIcons name="more-vert" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -1093,85 +1285,95 @@ export default function ChatDetailScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : (StatusBar.currentHeight ?? 24)}>
         <ScrollView
-          // @ts-ignore - ref is valid for ScrollView but TypeScript types are incorrect
-          ref={scrollViewRef}
+          ref={scrollViewRef as any}
           style={styles.messagesList}
-          contentContainerStyle={[styles.messagesContent, { paddingBottom: inputBarHeight + 12 }]}
+          contentContainerStyle={messagesContentStyle}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          onContentSizeChange={() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }}>
-          {messages.map((message) => {
-            const isMyMessage = message.senderId === currentUserId;
-            return (
-              <View
-                // @ts-ignore - key is a valid React prop but TypeScript types don't include it
-                key={`msg-${message.id}`}
-                style={[
-                  styles.messageContainer,
-                  isMyMessage ? styles.myMessageContainer : styles.theirMessageContainer,
-                ]}>
-                {!isMyMessage && user && (
-                  <Image source={user.avatar} style={styles.messageAvatar} />
-                )}
-                <View
-                  style={[
-                    styles.messageBubble,
-                    isMyMessage ? styles.myMessageBubble : styles.theirMessageBubble,
-                  ]}>
-                  <Text
-                    style={[
-                      styles.messageText,
-                      isMyMessage ? styles.myMessageText : styles.theirMessageText,
-                    ]}>
-                    {message.text}
+          removeClippedSubviews={Platform.OS === 'android'}
+          overScrollMode="never"
+          onContentSizeChange={handleContentSizeChange}>
+          {/* ── Icebreaker Suggestion Chip (empty chat only) ──────────────── */}
+          {messages.length === 0 && icebreaker && !icebreakerDismissed && (
+            <View style={{
+              margin: 20,
+              marginTop: 32,
+              alignItems: 'center',
+            }}>
+              {/* Decorative stars label */}
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, letterSpacing: 1, marginBottom: 10 }}>
+                ✦ COSMIC ICEBREAKER ✦
+              </Text>
+
+              {/* Chip card */}
+              <TouchableOpacity
+                onPress={handleUseIcebreaker}
+                activeOpacity={0.82}
+                style={{
+                  backgroundColor: 'rgba(139,92,246,0.18)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(139,92,246,0.35)',
+                  borderRadius: 16,
+                  padding: 14,
+                  maxWidth: '88%',
+                  alignItems: 'center',
+                }}>
+                <Text style={{
+                  color: 'rgba(255,255,255,0.88)',
+                  fontSize: 14,
+                  lineHeight: 20,
+                  textAlign: 'center',
+                  fontStyle: 'italic',
+                }}>
+                  "{icebreaker}"
+                </Text>
+                <View style={{
+                  marginTop: 10,
+                  backgroundColor: '#8b5cf6',
+                  borderRadius: 20,
+                  paddingHorizontal: 14,
+                  paddingVertical: 5,
+                }}>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+                    Tap to use this opener ✨
                   </Text>
-                  <View style={styles.messageFooter}>
-                    <Text style={styles.messageTime}>{formatTime(message.timestamp)}</Text>
-                    {isMyMessage && (
-                      <MaterialIcons
-                        name={message.isRead ? 'done-all' : 'done'}
-                        size={14}
-                        color={message.isRead ? '#A855F7' : 'rgba(255, 255, 255, 0.5)'}
-                        style={styles.readIndicator}
-                      />
-                    )}
-                  </View>
                 </View>
-              </View>
-            );
-          })}
+              </TouchableOpacity>
+
+              {/* Dismiss link */}
+              <TouchableOpacity
+                onPress={handleDismissIcebreaker}
+                hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                style={{ marginTop: 8 }}>
+                <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
+                  dismiss
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {renderedMessages}
         </ScrollView>
 
         {/* Input Area */}
         <View
           style={styles.inputContainer}
-          onLayout={(event) => {
-            const nextHeight = Math.ceil(event.nativeEvent.layout.height);
-            if (nextHeight > 0 && nextHeight !== inputBarHeight) {
-              setInputBarHeight(nextHeight);
-            }
-          }}>
+          onLayout={handleInputLayout}>
           <TextInput
             style={styles.textInput}
             placeholder="Type a message..."
             placeholderTextColor="rgba(255, 255, 255, 0.5)"
             value={messageText}
-            onChangeText={(text) => {
-              setMessageText(text);
-              handleTyping();
-            }}
+            onChangeText={handleMessageTextChange}
             multiline
             maxLength={500}
           />
           <TouchableOpacity
             style={[
               styles.sendButton,
-              (!messageText.trim() || sending || isMatched !== true) && styles.sendButtonDisabled,
+              isSendDisabled && styles.sendButtonDisabled,
             ]}
             onPress={handleSendMessage}
-            disabled={!messageText.trim() || sending || isMatched !== true}
+            disabled={isSendDisabled}
             activeOpacity={0.7}>
             {sending ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1179,7 +1381,7 @@ export default function ChatDetailScreen() {
               <MaterialIcons
                 name="send"
                 size={24}
-                color={messageText.trim() ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)'}
+                color={sendIconColor}
               />
             )}
           </TouchableOpacity>
@@ -1822,7 +2024,7 @@ export default function ChatDetailScreen() {
                             setReportSaved(true);
                           } else {
                             console.error('❌ Failed to save report:', reportResult.error);
-                            alert('Failed to save report. Please try again.');
+                            showAlert('Error', 'Failed to save report. Please try again.');
                             return;
                           }
                         }
@@ -1842,7 +2044,7 @@ export default function ChatDetailScreen() {
                             setReportSaved(true);
                           } else {
                             console.error('❌ Failed to save report:', reportResult.error);
-                            alert('Failed to save report. Please try again.');
+                            showAlert('Error', 'Failed to save report. Please try again.');
                             return;
                           }
                         }
@@ -1920,7 +2122,7 @@ export default function ChatDetailScreen() {
                     setReportSaved(true);
                   } else {
                     console.error('❌ Failed to save report:', reportResult.error);
-                    alert('Failed to save report. Please try again.');
+                    showAlert('Error', 'Failed to save report. Please try again.');
                     return;
                   }
                 }
@@ -1982,7 +2184,7 @@ export default function ChatDetailScreen() {
                     await new Promise(resolve => setTimeout(resolve, 300));
                   } else {
                     console.error('❌ Failed to save report (fallback):', reportResult.error);
-                    alert('Failed to save report. Please try again.');
+                    showAlert('Error', 'Failed to save report. Please try again.');
                     return;
                   }
                 } else if (reportSaved) {
@@ -2001,6 +2203,7 @@ export default function ChatDetailScreen() {
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 

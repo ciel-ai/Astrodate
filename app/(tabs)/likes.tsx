@@ -99,6 +99,7 @@ export default function LikesScreen() {
 
     const photosMap: Record<string, any[]> = {};
     for (const ph of (photosRes.data ?? [])) {
+      if (!ph.user_id) continue;
       if (!photosMap[ph.user_id]) photosMap[ph.user_id] = [];
       photosMap[ph.user_id].push(ph);
     }
@@ -179,6 +180,7 @@ export default function LikesScreen() {
 
       const photosMap: Record<string, any[]> = {};
       for (const ph of (photosRes.data ?? [])) {
+        if (!ph.user_id) continue;
         if (!photosMap[ph.user_id]) photosMap[ph.user_id] = [];
         photosMap[ph.user_id].push(ph);
       }

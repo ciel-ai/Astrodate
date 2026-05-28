@@ -98,7 +98,7 @@ export default function EmailVerifyScreen() {
       if (!result.success) {
         console.error('❌ [auth/verify] Verification failed:', result.error);
         setState('error');
-        setErrorMessage(result.error);
+        setErrorMessage(result.error ?? '');
         return;
       }
 

@@ -126,7 +126,7 @@ export const sendMessageToGemini = async (
           data = asGeminiFunctionResponse(await response.json());
         }
       } catch (fetchError) {
-        error = fetchError;
+        error = fetchError as Error;
       }
     }
 

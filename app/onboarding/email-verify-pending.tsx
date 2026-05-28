@@ -107,7 +107,7 @@ export default function EmailVerifyPendingScreen() {
 
     if (!result.success) {
       setVerifying(false);
-      showAlert('Verification Failed', result.error);
+      showAlert('Verification Failed', result.error ?? 'Verification failed');
       return;
     }
 
@@ -138,7 +138,7 @@ export default function EmailVerifyPendingScreen() {
       if (result.cooldownSeconds) {
         setResendCooldown(result.cooldownSeconds);
       }
-      showAlert('Could Not Resend', result.error);
+      showAlert('Could Not Resend', result.error ?? 'Could not resend');
     } else {
       setResendCooldown(60);
       showAlert(

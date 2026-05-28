@@ -170,7 +170,7 @@ export default function SettingsScreen() {
     setResendLoading(false);
     if (!result.success) {
       if (result.cooldownSeconds) startCooldown(result.cooldownSeconds);
-      showAlert('Could Not Resend', result.error);
+      showAlert('Could Not Resend', result.error ?? 'Could not resend');
     } else {
       startCooldown(60);
       showAlert('Verification Email Sent ✅', `A new link has been sent to ${currentEmail}. Check your inbox and spam folder.`);

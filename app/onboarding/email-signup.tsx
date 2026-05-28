@@ -136,14 +136,14 @@ export default function EmailSignupScreen() {
         if (result.code === 'EMAIL_ALREADY_EXISTS') {
           showAlert(
             'Account Already Exists',
-            result.error,
+            result.error ?? 'An error occurred',
             [
               { text: 'Log In Instead', onPress: () => router.replace('/onboarding/email-login') },
               { text: 'Cancel', style: 'cancel' },
             ]
           );
         } else {
-          showAlert('Sign Up Failed', result.error);
+          showAlert('Sign Up Failed', result.error ?? 'An error occurred');
         }
         return;
       }

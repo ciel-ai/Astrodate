@@ -227,9 +227,9 @@ export const getLastMessage = async (
     return {
       success: true,
       data: {
-        message: conversationMessage.message_text,
-        timestamp: new Date(conversationMessage.created_at),
-        isRead: conversationMessage.is_read,
+        message: conversationMessage.message_text ?? '',
+        timestamp: new Date(conversationMessage.created_at ?? Date.now()),
+        isRead: conversationMessage.is_read ?? false,
         isSentByMe: conversationMessage.sender_id === currentUserId,
       },
     };
@@ -555,9 +555,9 @@ export const getLastMessagesBatch = async (
       if (result.status === 'fulfilled' && !result.value.error && result.value.data && result.value.data.length > 0) {
         const msg = result.value.data[0];
         messageMap.set(otherUserId, {
-          message: msg.message_text,
-          timestamp: new Date(msg.created_at),
-          isRead: msg.is_read,
+          message: msg.message_text ?? '',
+          timestamp: new Date(msg.created_at ?? Date.now()),
+          isRead: msg.is_read ?? false,
           isSentByMe: msg.sender_id === currentUserId,
         });
       }
@@ -629,6 +629,7 @@ export const getUnreadCountsBatch = async (
 
     if (data) {
       data.forEach((msg) => {
+        if (!msg.sender_id) return;
         const count = countMap.get(msg.sender_id) || 0;
         countMap.set(msg.sender_id, count + 1);
       });

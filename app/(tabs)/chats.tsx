@@ -140,7 +140,7 @@ function ChatItemComponent({
       activeOpacity={0.7}
       onPress={() => {
         router.push({
-          pathname: '/chat/[id]' as any,
+          pathname: '/chat/[id]/index' as any,
           params: { id: chat.id },
         } as any);
       }}

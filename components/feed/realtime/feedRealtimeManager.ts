@@ -1,24 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { releaseRealtimeChannel, releaseRealtimeChannelsByTopicPrefix } from '@/lib/realtime-channels';
 
-type RealtimeChannel = {
-  topic: string;
-};
-
-type RealtimeClient = {
-  getChannels: () => RealtimeChannel[];
-  removeChannel: (channel: RealtimeChannel) => unknown;
-};
-
-export function removeFeedChannelsByTopicPrefix(
-  client: RealtimeClient,
-  topicPrefix: string
-) {
+export function removeFeedChannelsByTopicPrefix(client: any, topicPrefix: string) {
   releaseRealtimeChannelsByTopicPrefix(client, topicPrefix);
 }
 
-export function cleanupFeedChannel(
-  client: RealtimeClient,
-  channel: RealtimeChannel | null
-) {
+export function cleanupFeedChannel(client: any, channel: any) {
   releaseRealtimeChannel(client, channel);
 }
