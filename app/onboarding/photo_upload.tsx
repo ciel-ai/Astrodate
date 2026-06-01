@@ -2,9 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useNavigation } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
+import {  ActivityIndicator,
   Animated,
   Image,
   Platform,
@@ -14,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { uploadUserPhotos } from '../../lib/user-photos';
@@ -42,6 +41,14 @@ export default function PhotoUploadScreen() {
   }>({ allVerified: false });
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const isMountedRef = useRef(true);
+  const { showAlert } = useAuthAlert();
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     navigation.setOptions({
@@ -69,7 +76,7 @@ export default function PhotoUploadScreen() {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Permission Required',
           'Sorry, we need camera roll permissions to upload photos.',
           [{ text: 'OK' }]
@@ -82,12 +89,12 @@ export default function PhotoUploadScreen() {
 
   const pickImage = async () => {
     if (photos.length >= MAX_PHOTOS) {
-      Alert.alert('Maximum Photos Reached', `You can only upload up to ${MAX_PHOTOS} photos.`);
+      showAlert('Maximum Photos Reached', `You can only upload up to ${MAX_PHOTOS} photos.`);
       return;
     }
 
     // Show action sheet to choose between camera and gallery
-    Alert.alert(
+    showAlert(
       'Add Photo',
       'Choose where to get your photo from',
       [
@@ -104,7 +111,6 @@ export default function PhotoUploadScreen() {
           style: 'cancel',
         },
       ],
-      { cancelable: true }
     );
   };
 
@@ -160,19 +166,19 @@ export default function PhotoUploadScreen() {
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      showAlert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
   const takePhoto = async () => {
     if (photos.length >= MAX_PHOTOS) {
-      Alert.alert('Maximum Photos Reached', `You can only upload up to ${MAX_PHOTOS} photos.`);
+      showAlert('Maximum Photos Reached', `You can only upload up to ${MAX_PHOTOS} photos.`);
       return;
     }
 
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
+      showAlert(
         'Permission Required',
         'Sorry, we need camera permissions to take photos.',
         [{ text: 'OK' }]
@@ -192,7 +198,7 @@ export default function PhotoUploadScreen() {
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+      showAlert('Error', 'Failed to take photo. Please try again.');
     }
   };
 
@@ -215,7 +221,7 @@ export default function PhotoUploadScreen() {
 
   const handleContinue = async () => {
     if (photos.length < MIN_PHOTOS) {
-      Alert.alert(
+      showAlert(
         'More Photos Needed',
         `Please add at least ${MIN_PHOTOS} photos to continue.`,
         [{ text: 'OK' }]
@@ -231,7 +237,7 @@ export default function PhotoUploadScreen() {
         .filter((msg) => msg)
         .join('\n\n');
 
-      Alert.alert(
+      showAlert(
         'Photo Verification Required',
         `Some photos are still being verified or failed verification:\n\n${errorMessages}\n\nPlease wait for verification to complete or replace these photos with:\n• Clear photos showing your face\n• Photos with good lighting\n• Photos containing only you (one person)\n• Recent photos that look like you`,
         [
@@ -254,7 +260,7 @@ export default function PhotoUploadScreen() {
 
       if (userError || !user) {
         console.error('❌ Could not get current user:', userError);
-        Alert.alert(
+        showAlert(
           'Authentication Error',
           'Please log in to upload photos.',
           [{ text: 'OK' }]
@@ -268,7 +274,7 @@ export default function PhotoUploadScreen() {
       const photoUris = verifiedPhotos.map((p) => p.uri);
 
       if (photoUris.length === 0) {
-        Alert.alert(
+        showAlert(
           'No Photos to Upload',
           'Please add at least one verified photo.',
           [{ text: 'OK' }]
@@ -287,7 +293,7 @@ export default function PhotoUploadScreen() {
 
       if (!uploadResult.success) {
         console.error('❌ Photo upload failed:', uploadResult.error);
-        Alert.alert(
+        showAlert(
           'Upload Failed',
           uploadResult.error || 'Failed to upload photos. Please try again.',
           [{ text: 'OK' }]
@@ -303,18 +309,18 @@ export default function PhotoUploadScreen() {
     } catch (error) {
       console.error('❌ Exception uploading photos:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      Alert.alert(
+      showAlert(
         'Upload Error',
         `Failed to upload photos: ${errorMessage}\n\nPlease try again.`,
         [{ text: 'OK' }]
       );
     } finally {
-      setIsUploading(false);
+      if (isMountedRef.current) setIsUploading(false);
     }
   };
 
   const handleSkip = () => {
-    Alert.alert(
+    showAlert(
       'Skip Photo Upload?',
       'Adding photos significantly improves your chances of matching. Are you sure you want to skip?',
       [

@@ -1,6 +1,8 @@
 import { getLastMessagesBatch, getUnreadCountsBatch } from '@/lib/messages';
+import { releaseRealtimeChannel, releaseRealtimeChannelsByTopicPrefix, trackRealtimeChannel } from '@/lib/realtime-channels';
 import { getReportedUserIds } from '@/lib/reports';
 import { supabase } from '@/lib/supabase';
+import { cleanupTypingSubscriptions, subscribeToMultipleTypingChannels } from '@/lib/typing-status';
 import { getAllUsers } from '@/lib/users';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,9 +14,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
+  FlatList,
   Modal,
   RefreshControl,
-  FlatList,
   StyleSheet,
   Text,
   TextInput,
@@ -138,9 +140,9 @@ function ChatItemComponent({
       activeOpacity={0.7}
       onPress={() => {
         router.push({
-          pathname: '/chat/[id]' as any,
+          pathname: '/chat/[id]',
           params: { id: chat.id },
-        } as any);
+        });
       }}
       onLongPress={(event) => onLongPress(chat, event)}>
       <View style={styles.avatarContainer}>
@@ -213,20 +215,54 @@ export default function ChatsScreen() {
   const [onlineStatus, setOnlineStatus] = useState<Map<string, boolean>>(new Map());
   const authRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatsCountRef = useRef(0);
+  const chatsRef = useRef<ChatItem[]>([]);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     chatsCountRef.current = chats.length;
+    chatsRef.current = chats;
   }, [chats.length]);
 
-  const stars = React.useMemo(() => {
-    return Array.from({ length: 100 }).map((_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: Math.random() * 2 + 0.5,
-      opacity: Math.random() * 0.8 + 0.2,
-    }));
-  }, []);
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+
+  const STAR_DATA = Array.from({ length: 100 }).map((_, i) => ({
+    id: i,
+    x: (i * 53 + 8) % 93,
+    y: (i * 37 + 5) % 95,
+    size: (i % 3) * 0.5 + 0.5,
+    opacity: 0.2 + (i % 5) * 0.12,
+  }));
+
+  const StarField = React.memo(function StarField() {
+    return (
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {STAR_DATA.map(s => (
+          <View key={s.id} style={{
+            position: 'absolute', left: `${s.x}%`, top: `${s.y}%`,
+            width: s.size, height: s.size, borderRadius: s.size,
+            backgroundColor: '#fff', opacity: s.opacity
+          }} />
+        ))}
+      </View>
+    );
+  });
+  // const stars = React.useMemo(() => {
+  //   return Array.from({ length: 100 }).map((_, i) => ({
+  //     id: i,
+  //     x: Math.random() * 100,
+  //     y: Math.random() * 100,
+  //     size: Math.random() * 2 + 0.5,
+  //     opacity: Math.random() * 0.8 + 0.2,
+  //   }));
+  // }, []);
 
   // Format timestamp for display
   const formatTimestamp = (date: Date): string => {
@@ -259,14 +295,14 @@ export default function ChatsScreen() {
       const stored = await AsyncStorage.getItem(CHAT_PREFERENCES_KEY);
       if (stored) {
         const preferences: ChatPreferences = JSON.parse(stored);
-        setChatPreferences(preferences);
+        if (isMountedRef.current) setChatPreferences(preferences);
         return preferences;
       }
     } catch (error) {
       console.error('Error loading chat preferences:', error);
     }
     const defaultPrefs = { pinned: [], archived: [], deleted: [] };
-    setChatPreferences(defaultPrefs);
+    if (isMountedRef.current) setChatPreferences(defaultPrefs);
     return defaultPrefs;
   }, []);
 
@@ -274,14 +310,20 @@ export default function ChatsScreen() {
   const saveChatPreferences = useCallback(async (preferences: ChatPreferences) => {
     try {
       await AsyncStorage.setItem(CHAT_PREFERENCES_KEY, JSON.stringify(preferences));
-      setChatPreferences(preferences);
+      if (isMountedRef.current) setChatPreferences(preferences);
     } catch (error) {
       console.error('Error saving chat preferences:', error);
     }
   }, []);
 
+  const isFetchingRef = useRef(false);
+  const sortedUserIds = chats.map((c) => c.id).sort().join(',');
+  const chatChannelIds = chats.map((c) => c.channelId).filter(Boolean).sort().join(',');
+
   // Fetch users from backend with last messages
   const fetchUsers = useCallback(async (isRefresh = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     if (isRefresh) {
       setRefreshing(true);
     } else if (chatsCountRef.current === 0) {
@@ -405,32 +447,51 @@ export default function ChatsScreen() {
         // Remove timestamp from final items (not needed in UI)
         const finalChatItems = chatItemsWithTimestamps.map(({ timestamp, ...rest }) => rest);
 
-        setChats(finalChatItems);
-        setFilteredChats(finalChatItems);
+        if (isMountedRef.current) {
+          setChats(finalChatItems);
+          setFilteredChats(finalChatItems);
+        }
       } else {
         console.error('❌ Failed to fetch users:', result.error);
 
         // On cold app start auth restoration can lag; retry instead of showing permanent empty state.
+        const authRetryCountRef = useRef(0);
+        const MAX_AUTH_RETRIES = 5;
+
+        // Inside fetchUsers, replace the retry logic:
         if (result.error === 'User not authenticated') {
-          if (authRetryTimeoutRef.current) {
-            clearTimeout(authRetryTimeoutRef.current);
+          if (authRetryCountRef.current >= MAX_AUTH_RETRIES) {
+            console.warn('[Chats] Max auth retries reached');
+            authRetryCountRef.current = 0;
+            return;  // stop retrying
           }
+          authRetryCountRef.current++;
           authRetryTimeoutRef.current = setTimeout(() => {
-            void fetchUsers();
+            if (isMountedRef.current) void fetchUsers();
           }, 900);
           return;
         }
 
-        setChats([]);
-        setFilteredChats([]);
+        // Reset counter on success:
+        authRetryCountRef.current = 0;
+
+        if (isMountedRef.current) {
+          setChats([]);
+          setFilteredChats([]);
+        }
       }
     } catch (error) {
       console.error('❌ Error fetching users:', error);
-      setChats([]);
-      setFilteredChats([]);
+      if (isMountedRef.current) {
+        setChats([]);
+        setFilteredChats([]);
+      }
     } finally {
-      setRefreshing(false);
-      setLoading(false);
+      if (isMountedRef.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
+      isFetchingRef.current = false;
     }
   }, [loadChatPreferences]);
 
@@ -455,12 +516,10 @@ export default function ChatsScreen() {
       setFilteredChats((prev) => prev.map((c) => c.id === userId ? { ...c, isOnline: status } : c));
     };
 
-    // Use a SINGLE shared channel that listens to all user_online_status changes.
-    // The previous approach created one channel per matched user — with 30 matches
-    // that was 30 channels, hitting Supabase channel limits and causing silent
-    // real-time drops. A single channel with client-side filtering is equivalent
-    // and uses exactly 1 connection regardless of match count.
+    // Use a single filtered channel that listens only to matched users' status.
+    // This avoids broad presence leaks while preserving low subscription counts.
     const userIdSet = new Set(userIds);
+    const filterString = `user_id=in.(${userIds.join(',')})`;
     const onlineChannel = supabase
       .channel(`online_status_bulk:${userIds.slice(0, 5).join('_')}`)
       .on(
@@ -469,30 +528,29 @@ export default function ChatsScreen() {
           event: '*',
           schema: 'public',
           table: 'user_online_status',
+          filter: filterString,
         },
         (payload) => {
           const statusData = (payload.new || payload.old) as any;
           if (!statusData || !('user_id' in statusData) || !('is_online' in statusData)) return;
           const userId = statusData.user_id as string;
-          // Client-side filter — only update users in our matched list
-          if (!userIdSet.has(userId)) return;
           applyStatusUpdate(userId, resolveStatus(statusData.is_online, statusData.last_seen ?? null));
         }
       )
       .subscribe();
+    trackRealtimeChannel(onlineChannel);
 
-    // Periodic backup refresh: single batch query instead of N individual queries.
-    // Replaces the previous loop that fired one .single() per user every 30s.
+    // Periodic backup refresh: single batch RPC instead of direct table reads.
     const refreshInterval = setInterval(async () => {
       try {
-        const { data, error } = await supabase
-          .from('user_online_status')
-          .select('user_id, is_online, last_seen')
-          .in('user_id', userIds);
+        const { data, error } = await supabase.rpc('get_matched_user_presence', {
+          p_target_user_ids: userIds,
+        });
 
         if (error || !data) return;
 
-        for (const row of data) {
+        const rows = Array.isArray(data) ? data : [data];
+        for (const row of rows) {
           applyStatusUpdate(row.user_id, resolveStatus(row.is_online, row.last_seen ?? null));
         }
       } catch (err) {
@@ -502,19 +560,22 @@ export default function ChatsScreen() {
 
     return () => {
       clearInterval(refreshInterval);
-      supabase.removeChannel(onlineChannel);
+      releaseRealtimeChannel(supabase, onlineChannel);
     };
-  }, [chats.length, chats.map(c => c.id).sort().join(',')]);
+  }, [sortedUserIds]);
 
   // Set up real-time typing indicators for all chats using the new typing system
   useEffect(() => {
     if (chats.length === 0) return;
 
     let typingChannels: any[] = [];
+    let isActive = true;
+    let hasCleanedUp = false;
 
     // Get current user ID
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+    supabase.auth.getUser().then((result) => {
+      const user = result?.data?.user;
+      if (!user || !isActive) return;
 
       const currentUserId = user.id;
 
@@ -527,47 +588,50 @@ export default function ChatsScreen() {
         return;
       }
 
-      // Import and use the typing status utility
-      import('@/lib/typing-status').then(({ subscribeToMultipleTypingChannels }) => {
-        typingChannels = subscribeToMultipleTypingChannels(
-          currentUserId,
-          channelIds,
-          (typingMap) => {
-            // Convert channel-based typing map to user-based typing map
-            const userTypingMap = new Map<string, boolean>();
-            chats.forEach((chat) => {
-              if (chat.channelId) {
-                const isTyping = typingMap.get(chat.channelId) || false;
-                userTypingMap.set(chat.id, isTyping);
-              }
-            });
-            setTypingStatus(userTypingMap);
-          }
-        );
-      });
+      // Use the typing status utility (statically imported)
+      if (!isActive) return;
+      typingChannels = subscribeToMultipleTypingChannels(
+        currentUserId,
+        channelIds,
+        (typingMap) => {
+          if (!isActive) return;
+          // Convert channel-based typing map to user-based typing map
+          const userTypingMap = new Map<string, boolean>();
+          chatsRef.current.forEach((chat) => {
+            if (chat.channelId) {
+              const isTyping = typingMap.get(chat.channelId) || false;
+              userTypingMap.set(chat.id, isTyping);
+            }
+          });
+          setTypingStatus(userTypingMap);
+        }
+      );
+
+      if (hasCleanedUp && typingChannels.length > 0) {
+        cleanupTypingSubscriptions(typingChannels);
+        typingChannels = [];
+      }
     });
 
     return () => {
-      import('@/lib/typing-status').then(({ cleanupTypingSubscriptions }) => {
-        cleanupTypingSubscriptions(typingChannels);
-      });
+      isActive = false;
+      hasCleanedUp = true;
+      cleanupTypingSubscriptions(typingChannels);
     };
-  }, [chats]);
+  }, [chatChannelIds]);
 
   // Subscribe to new messages to update last message and unread count in real-time
   useEffect(() => {
     let messagesChannel: any = null;
+    let isMounted = true;
 
     const setupSubscription = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
+      if (!user || !isMounted) return;
 
       const currentUserId = user.id;
-      for (const existingChannel of supabase.getChannels()) {
-        if (existingChannel.topic.includes(`chats_list_messages:${currentUserId}`)) {
-          void supabase.removeChannel(existingChannel);
-        }
-      }
+      releaseRealtimeChannelsByTopicPrefix(supabase, `chats_list_messages:${currentUserId}`);
 
       const listChannelName = `chats_list_messages:${currentUserId}:${Date.now()}`;
 
@@ -638,13 +702,15 @@ export default function ChatsScreen() {
           }
         )
         .subscribe();
+      trackRealtimeChannel(messagesChannel);
     };
 
     setupSubscription();
 
     return () => {
+      isMounted = false;
       if (messagesChannel) {
-        supabase.removeChannel(messagesChannel);
+        releaseRealtimeChannel(supabase, messagesChannel);
       }
     };
   }, [fetchUsers]);
@@ -683,9 +749,7 @@ export default function ChatsScreen() {
   }, [searchQuery, chats]);
 
   // Fetch users on mount and when screen comes into focus
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+
 
   // Keep inbox synced with auth session readiness and app resume events.
   useEffect(() => {
@@ -695,7 +759,10 @@ export default function ChatsScreen() {
       }
     });
 
+    let lastAppState = AppState.currentState;
     const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === lastAppState) return;
+      lastAppState = state;
       if (state === 'active') {
         void fetchUsers();
       }
@@ -828,7 +895,7 @@ export default function ChatsScreen() {
       end={{ x: 0, y: 1 }}
       style={styles.gradientContainer}>
       <View style={styles.starsContainer}>
-        {stars.map((star) => (
+        {STAR_DATA.map((star) => (
           <View
             key={star.id}
             style={[
@@ -869,7 +936,7 @@ export default function ChatsScreen() {
           style={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           data={filteredChats}
-          keyExtractor={(item, index) => `${item.isPinned ? 'pinned' : 'recent'}-${item.id}-${index}`}
+          keyExtractor={(item) => `${item.isPinned ? 'pinned' : 'recent'}-${item.id}`}
           removeClippedSubviews={true}
           maxToRenderPerBatch={10}
           windowSize={10}

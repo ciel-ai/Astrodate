@@ -363,7 +363,7 @@ export const deleteUserPhoto = async (photoId: string) => {
     // Delete from storage
     const { error: storageError } = await supabase.storage
       .from('user-photos')
-      .remove([photo.storage_path]);
+      .remove([photo.storage_path ?? ''].filter(Boolean));
 
     if (storageError) {
       console.error('❌ Error deleting photo from storage:', storageError);
@@ -389,4 +389,3 @@ export const deleteUserPhoto = async (photoId: string) => {
     return { success: false, error: errorMessage };
   }
 };
-

@@ -1,4 +1,5 @@
 import { COUNTRIES, CountryCodePicker, type Country } from '@/components/country-code-picker';
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import { supabase } from '@/lib/supabase';
 import { isValidPhoneNumber } from '@/utils/phone-utils';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -6,22 +7,68 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Complete the OAuth session in the browser
 WebBrowser.maybeCompleteAuthSession();
 
+
+
 export default function SignupScreen() {
   const router = useRouter();
   const navigation: any = useNavigation();
+  const { showAlert } = useAuthAlert();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]); // Default to India
+  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const isMountedRef = useRef(true);
+
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const cardSlideAnim = useRef(new Animated.Value(80)).current;
+  const inputBorderAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 50, useNativeDriver: true }),
+      Animated.spring(cardSlideAnim, { toValue: 0, friction: 8, tension: 40, delay: 150, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    Animated.timing(inputBorderAnim, {
+      toValue: isFocused ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
@@ -34,7 +81,6 @@ export default function SignupScreen() {
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
       () => setIsKeyboardVisible(false)
     );
-
     return () => {
       keyboardWillShow.remove();
       keyboardWillHide.remove();
@@ -46,61 +92,54 @@ export default function SignupScreen() {
   };
 
   const handleOAuthSuccess = async (user: any, isSignup: boolean) => {
-    // Check if user already existed (for signup, only new users allowed)
     const userCreatedAt = new Date(user.created_at);
     const now = new Date();
     const minutesSinceCreation = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60);
-    
-    // If user was created more than 2 minutes ago, they already existed
+
     if (isSignup && minutesSinceCreation > 2) {
-      setLoading(false);
-      // Sign out the user since they shouldn't be logged in
+      if (isMountedRef.current) setLoading(false);
       await supabase.auth.signOut();
-      Alert.alert(
+      if (!isMountedRef.current) return;
+      showAlert(
         'Account Already Exists',
         'An account with this Google email already exists. Please use the login page instead.',
         [
           {
             text: 'Go to Login',
-            onPress: () => {
-              router.replace('/onboarding/login');
-            },
+            onPress: () => { router.replace('/onboarding/login'); },
           },
         ]
       );
       return;
     }
-    
+
     console.log('✅ Signup successful, navigating to basic details');
-    setLoading(false);
-    // New signup users start with basic details
+    if (isMountedRef.current) setLoading(false);
     router.replace('/onboarding/basic-details');
   };
 
   const handleGenerateOTP = async () => {
+
     if (!phoneNumber || phoneNumber.trim() === '') {
-      Alert.alert('Phone number required', 'Please enter your phone number');
+      showAlert('Phone number required', 'Please enter your phone number');
       return;
     }
 
-    // Format phone number to E.164 format using selected country code
-    const cleanedNumber = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+    const cleanedNumber = phoneNumber.replace(/\D/g, '');
     if (!cleanedNumber || cleanedNumber.length < 7) {
-      Alert.alert('Invalid phone number', 'Please enter a valid phone number');
+      showAlert('Invalid phone number', 'Please enter a valid phone number');
       return;
     }
-    
+
     const formatted = `${selectedCountry.dialCode}${cleanedNumber}`;
-    
+
     if (!isValidPhoneNumber(formatted)) {
-      Alert.alert('Invalid phone number', 'Please enter a valid phone number');
+      showAlert('Invalid phone number', 'Please enter a valid phone number');
       return;
     }
 
     setLoading(true);
     try {
-      // Step 1: Check if user already exists in auth.users table via RPC function
-      // This checks the auth.users table (not just user_profiles)
       const { data: authUserData, error: authUserError } = await supabase.rpc('check_auth_user_exists', {
         input_phone: formatted,
       });
@@ -110,194 +149,261 @@ export default function SignupScreen() {
         error: authUserError,
       });
 
-      // If RPC function exists and returns a user, they already have an account
       if (authUserData && authUserData.length > 0) {
         console.warn('⚠️ User already exists in auth.users with this phone number');
-        setLoading(false);
-        Alert.alert(
+        if (isMountedRef.current) setLoading(false);
+        showAlert(
           'Account Already Exists',
           'An account with this phone number already exists. Please use the login page instead.',
           [
             {
               text: 'Go to Login',
-              onPress: () => {
-                router.replace('/onboarding/login');
-              },
+              onPress: () => { router.replace('/onboarding/login'); },
             },
-            {
-              text: 'Cancel',
-              onPress: () => {
-                setLoading(false);
-              },
-              style: 'cancel',
-            },
+            { text: 'Cancel', style: 'cancel' },
           ]
         );
         return;
       }
 
-      // If RPC function doesn't exist (error code 42883), fall back to user_profiles check
       if (authUserError && authUserError.code === '42883') {
         console.warn('⚠️ RPC function check_auth_user_exists not found, falling back to user_profiles check');
-        
-        // Step 2: Check user_profiles table as a fallback
-        const { data: profileData, error: profileError } = await supabase
+
+        const { data: profileData } = await supabase
           .from('user_profiles')
           .select('user_id, phone_number')
           .eq('phone_number', formatted);
 
-        // If profile exists with this phone number, user already has an account
         if (profileData && profileData.length > 0) {
           console.warn('⚠️ User already exists with this phone number in user_profiles');
-          setLoading(false);
-          Alert.alert(
+          if (isMountedRef.current) setLoading(false);
+          showAlert(
             'Account Already Exists',
             'An account with this phone number already exists. Please use the login page instead.',
             [
               {
                 text: 'Go to Login',
-                onPress: () => {
-                  router.replace('/onboarding/login');
-                },
+                onPress: () => { router.replace('/onboarding/login'); },
               },
-              {
-                text: 'Cancel',
-                onPress: () => {
-                  setLoading(false);
-                },
-                style: 'cancel',
-              },
+              { text: 'Cancel', style: 'cancel' },
             ]
           );
           return;
         }
       }
 
-      // Step 3: If no existing user found, now generate OTP for new user
-      const { data, error } = await supabase.auth.signInWithOtp({
-        phone: formatted,
-      });
+      const { data, error } = await supabase.auth.signInWithOtp({ phone: formatted });
 
       if (error) {
         let errorMessage = error.message || 'Could not send OTP. Please try again.';
-        
-        // Provide more helpful error messages
         if (error.message?.includes('Invalid phone number')) {
           errorMessage = 'Invalid phone number format. Please include country code (e.g., +1 for US, +91 for India)';
         } else if (error.message?.includes('Twilio') || error.message?.includes('SMS')) {
           errorMessage = 'SMS service error. Please check your Twilio configuration in Supabase.';
         }
-        
-        Alert.alert('OTP Generation Failed', errorMessage);
-        setLoading(false);
+        showAlert('OTP Generation Failed', errorMessage);
+        if (isMountedRef.current) setLoading(false);
         return;
       }
 
-      // Check if we got a successful response
       if (!data) {
-        Alert.alert('OTP Generation Failed', 'No response from server. Please check your Supabase configuration.');
-        setLoading(false);
+        showAlert('OTP Generation Failed', 'No response from server. Please check your Supabase configuration.');
+        if (isMountedRef.current) setLoading(false);
         return;
       }
-      
-      // Step 3: Success - new user, navigate to OTP verification page with signup flag
+
       router.push({
         pathname: '/onboarding/otp-verify',
         params: { phone: formatted, isSignup: 'true' },
       });
     } catch (err: any) {
       console.error('❌ OTP generation error:', err?.message || String(err));
-      Alert.alert('OTP generation error', err?.message ?? String(err) ?? 'An unexpected error occurred. Please try again.');
+      showAlert('OTP generation error', err?.message ?? String(err) ?? 'An unexpected error occurred. Please try again.');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
+  const borderColor = inputBorderAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#E8E0F0', '#7C3AED'],
+  });
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={[]}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
         keyboardVerticalOffset={0}
       >
+        {/* Deep space gradient background */}
         <LinearGradient
-          colors={['#1A0B2E', '#2D1B4E', '#4A2C5A']}
+          colors={['#0D0618', '#1A0B2E', '#2D1255', '#3D1A6E']}
           style={styles.background}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
         >
+          {/* Star field dots */}
+          <View style={styles.starField} pointerEvents="none">
+            {[...Array(28)].map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.star,
+                  {
+                    top: `${(i * 37 + 5) % 95}%`,
+                    left: `${(i * 53 + 8) % 93}%`,
+                    width: i % 4 === 0 ? 3 : i % 3 === 0 ? 2 : 1.5,
+                    height: i % 4 === 0 ? 3 : i % 3 === 0 ? 2 : 1.5,
+                    opacity: 0.15 + (i % 5) * 0.12,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Upper Purple Area Content */}
+            {/* Hero section */}
             {!isKeyboardVisible && (
-              <View style={styles.upperContent}>
-                <TouchableOpacity 
+              <Animated.View
+                style={[
+                  styles.heroSection,
+                  { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+                ]}
+              >
+                <TouchableOpacity
                   style={styles.backButton}
                   onPress={() => router.back()}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+                  <View style={styles.backButtonInner}>
+                    <MaterialIcons name="arrow-back" size={20} color="#E0D4FF" />
+                  </View>
                 </TouchableOpacity>
-                
-                <View style={styles.upperTextContainer}>
-                  <Text style={styles.upperHeading}>Sign Up</Text>
-                  <Text style={styles.upperSubtitle}>Love is written in the stars. Let's decode yours</Text>
-                  <Text style={styles.upperSubtitle2}>Sign up and Swipe with the universe on your side</Text>
-                </View>
-              </View>
+
+                {/* Glow orb behind logo */}
+                <View style={styles.logoGlow} />
+                <Image
+                  source={require('../../assets/images/logo.png')}
+                  style={styles.heroLogo}
+                  resizeMode="contain"
+                />
+
+                <Text style={styles.heroTitle}>Create Account</Text>
+                <Text style={styles.heroSubtitle}>Love is written in the stars ✦</Text>
+              </Animated.View>
             )}
 
-            {/* White Container at Bottom */}
-            <View style={styles.whiteCard}>
-            <View style={styles.headerRow}>
-              <Image source={require('../../assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
-              <Text style={styles.appTitle}>AstroDate</Text>
-            </View>
+            {/* Card */}
+            <Animated.View
+              style={[
+                styles.card,
+                { transform: [{ translateY: cardSlideAnim }], opacity: fadeAnim },
+              ]}
+            >
+              {/* Card top accent line */}
+              <LinearGradient
+                colors={['#7C3AED', '#A855F7', '#EC4899']}
+                style={styles.cardAccentLine}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
 
-            <Text style={styles.welcome}>Create Account</Text>
-            <Text style={styles.subtitle}>Sign up to continue</Text>
+              <View style={styles.cardContent}>
+                <Text style={styles.cardTitle}>Sign Up</Text>
+                <Text style={styles.cardSubtitle}>Enter your phone number to get started</Text>
 
-            <View style={styles.inputsWrap}>
-              <View style={styles.inputRow}>
-                <View style={styles.iconWrap}><MaterialIcons name="phone" size={18} color="#6B5A7A" /></View>
-                <CountryCodePicker
-                  selectedCountry={selectedCountry}
-                  onSelect={setSelectedCountry}
-                />
-                <TextInput
-                  value={phoneNumber}
-                  onChangeText={(text) => {
-                    // Only allow digits and limit to 10 digits
-                    const digitsOnly = text.replace(/\D/g, '');
-                    if (digitsOnly.length <= 10) {
-                      setPhoneNumber(digitsOnly);
-                    }
-                  }}
-                  placeholder="Phone number"
-                  placeholderTextColor="#9CA3AF"
-                  style={styles.input}
-                  keyboardType="number-pad"
-                  autoCapitalize="none"
-                  maxLength={10}
-                />
+                {/* Phone input */}
+                <Animated.View style={[styles.inputContainer, { borderColor }]}>
+                  <View style={styles.phoneIconWrap}>
+                    <MaterialIcons name="phone" size={17} color="#9B72CF" />
+                  </View>
+                  <CountryCodePicker
+                    selectedCountry={selectedCountry}
+                    onSelect={setSelectedCountry}
+                  />
+                  <View style={styles.inputDivider} />
+                  <TextInput
+                    value={phoneNumber}
+                    onChangeText={(text) => {
+                      const digitsOnly = text.replace(/\D/g, '');
+                      if (digitsOnly.length <= 10) setPhoneNumber(digitsOnly);
+                    }}
+                    placeholder="Phone number"
+                    placeholderTextColor="#B0A0C8"
+                    style={styles.input}
+                    keyboardType="number-pad"
+                    autoCapitalize="none"
+                    maxLength={10}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                  />
+                  {phoneNumber.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setPhoneNumber('')}
+                      style={styles.clearButton}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <MaterialIcons name="cancel" size={18} color="#B0A0C8" />
+                    </TouchableOpacity>
+                  )}
+                </Animated.View>
+
+                {/* Number length hint */}
+                <Text style={styles.inputHint}>
+                  {phoneNumber.length > 0
+                    ? `${phoneNumber.length}/10 digits entered`
+                    : `${selectedCountry.flag} ${selectedCountry.name} (${selectedCountry.dialCode})`}
+                </Text>
+
+                {/* OTP Button */}
+                <TouchableOpacity
+                  onPress={onGenerateOTP}
+                  activeOpacity={0.85}
+                  disabled={loading}
+                  style={styles.otpButtonWrapper}
+                >
+                  <LinearGradient
+                    colors={loading ? ['#6B6B8A', '#6B6B8A'] : ['#6D28D9', '#7C3AED', '#9333EA']}
+                    style={styles.otpButton}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="person-add" size={18} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.otpButtonText}>Get OTP</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Terms note */}
+                <Text style={styles.termsText}>
+                  By signing up you agree to our{' '}
+                  <Text style={styles.termsLink}>Terms of Service</Text>
+                  {' '}and{' '}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
+
+                {/* Login link */}
+                <View style={styles.loginRow}>
+                  <Text style={styles.loginText}>Already have an account?</Text>
+                  <TouchableOpacity
+                    onPress={() => router.push('/onboarding/login')}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={styles.loginLink}> Login</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-
-              <TouchableOpacity style={styles.signInBtnWrapper} onPress={onGenerateOTP} activeOpacity={0.9} disabled={loading}>
-                <LinearGradient colors={[ '#1A0B2E', '#2D1B4E', '#4A2C5A' ]} style={styles.signInBtn}>
-                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.signInLabel}>Generate OTP</Text>}
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <View style={styles.bottomRow}>
-                <Text style={styles.bottomText}>Already have an account?</Text>
-                <TouchableOpacity onPress={() => router.push('/onboarding/login')}><Text style={styles.bottomLink}> Login</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
+            </Animated.View>
           </ScrollView>
         </LinearGradient>
       </KeyboardAvoidingView>
@@ -306,131 +412,206 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: 'transparent' },
+  safeArea: { flex: 1, backgroundColor: '#0D0618' },
   keyboardView: { flex: 1 },
   background: { flex: 1 },
   scrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
-  
-  upperContent: {
-    paddingTop: 50,
-    paddingBottom: 20,
-    minHeight: 180,
+
+  // Star field
+  starField: { ...StyleSheet.absoluteFillObject },
+  star: {
+    position: 'absolute',
+    borderRadius: 99,
+    backgroundColor: '#FFFFFF',
+  },
+
+  // Hero
+  heroSection: {
+    paddingTop: 20,
+    paddingBottom: 32,
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
   backButton: {
     position: 'absolute',
-    top: 50,
+    top: 20,
     left: 20,
+    zIndex: 10,
+  },
+  backButtonInner: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2,
   },
-  upperTextContainer: {
-    marginTop: 60,
-    paddingLeft: 20,
-    paddingRight: 20,
+  logoGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#7C3AED',
+    opacity: 0.18,
+    top: 50,
+    alignSelf: 'center',
   },
-  upperHeading: {
-    fontSize: 36,
+  heroLogo: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    marginTop: 16,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(167,139,250,0.4)',
+  },
+  heroTitle: {
+    fontSize: 34,
     fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 12,
+    color: '#F3EEFF',
+    letterSpacing: 0.3,
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  upperSubtitle: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#FFFFFF',
-    lineHeight: 22,
+  heroSubtitle: {
+    fontSize: 15,
+    color: '#C4A8F0',
+    textAlign: 'center',
     opacity: 0.9,
-    marginBottom: 4,
-  },
-  upperSubtitle2: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#FFFFFF',
-    lineHeight: 22,
-    opacity: 0.9,
+    letterSpacing: 0.2,
   },
 
-  whiteCard: {
+  // Card
+  card: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingTop: 52,
-    paddingBottom: 40,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: -4 },
-    shadowRadius: 20,
-    elevation: 10,
+    backgroundColor: '#FDFBFF',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    overflow: 'hidden',
+    shadowColor: '#4B0082',
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: -6 },
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  cardAccentLine: {
+    height: 4,
+    width: '100%',
+  },
+  cardContent: {
+    paddingTop: 32,
+    paddingBottom: 44,
+    paddingHorizontal: 28,
+  },
+  cardTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#1A0B2E',
+    marginBottom: 6,
+    letterSpacing: 0.2,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#8B7BAE',
+    marginBottom: 28,
+    letterSpacing: 0.1,
   },
 
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  logo: { width: 56, height: 56, borderRadius: 28, marginTop:-10 },
-  appTitle: { color: '#000000', fontSize: 22, fontWeight: '700', marginTop: -10 },
-
-  welcome: { color: '#000000', fontSize: 34, fontWeight: '800', marginTop: 6 },
-  subtitle: { color: '#666666', marginTop: 6, marginBottom: 18, fontSize: 15 },
-
-  inputsWrap: { width: '100%' },
-  inputRow: {
+  // Input
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 16,
+    backgroundColor: '#F7F3FF',
+    borderRadius: 18,
+    borderWidth: 1.5,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    paddingVertical: 4,
+    marginBottom: 8,
   },
-  iconWrap: { width: 28, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  input: { flex: 1, color: '#000000', fontSize: 16 },
-
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  rememberRow: { flexDirection: 'row', alignItems: 'center' },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-    marginRight: 8,
+  phoneIconWrap: {
+    width: 26,
     alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: 6,
   },
-  checkboxChecked: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
-  checkboxTick: { width: 8, height: 8, backgroundColor: '#fff', borderRadius: 2 },
-  rememberText: { color: '#FFFFFF' },
-
-  signInBtnWrapper: { marginTop: 6, marginBottom: 12, width: '100%' },
-  signInBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
-  signInLabel: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
-
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },
-  divider: { flex: 1, height: 1, backgroundColor: '#E0E0E0' },
-  dividerText: { color: '#666666', marginHorizontal: 8, fontSize: 14 },
-
-  socialRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, width: '100%', marginTop: 6 },
-  socialBtn: {
+  inputDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: '#DDD4F0',
+    marginHorizontal: 10,
+  },
+  input: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    height: 56,
-    borderRadius: 14,
+    color: '#1A0B2E',
+    fontSize: 16,
+    fontWeight: '500',
+    paddingVertical: 14,
+    letterSpacing: 0.5,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: '#A090C0',
+    marginBottom: 24,
+    marginLeft: 4,
+    letterSpacing: 0.1,
+  },
+
+  // OTP Button
+  otpButtonWrapper: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 16,
+    shadowColor: '#7C3AED',
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  otpButton: {
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
+    flexDirection: 'row',
   },
-  socialLetter: { fontSize: 16, fontWeight: '700', color: '#000000' },
+  otpButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 17,
+    letterSpacing: 0.4,
+  },
 
-  bottomRow: { flexDirection: 'row', marginTop: 18, justifyContent: 'center', alignItems: 'center' },
-  bottomText: { color: '#666666' },
-  bottomLink: { color: '#7C3AED', fontWeight: '700' },
+  // Terms
+  termsText: {
+    fontSize: 12,
+    color: '#A090C0',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 28,
+    paddingHorizontal: 8,
+  },
+  termsLink: {
+    color: '#7C3AED',
+    fontWeight: '600',
+  },
+
+  // Login
+  loginRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginText: {
+    color: '#8B7BAE',
+    fontSize: 14,
+  },
+  loginLink: {
+    color: '#7C3AED',
+    fontWeight: '700',
+    fontSize: 14,
+  },
 });
-
-

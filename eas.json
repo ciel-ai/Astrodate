@@ -11,7 +11,10 @@
     },
     "production": {
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "ios": {
+          "buildConfiguration": "Release"
+        }
       }
     }
   },

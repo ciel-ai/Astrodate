@@ -1,4 +1,7 @@
 import { supabase } from './supabase';
+import type { Json } from './database.types';
+import { drainPendingPushNotifications } from './notifications';
+import { generateAndSaveIcebreaker } from './icebreaker';
 
 export type LikeActionType = 'like' | 'dislike' | 'super_like';
 
@@ -35,6 +38,14 @@ export async function saveUserLike(
 
     if (userId === likedUserId) {
       return { success: false, error: 'Cannot like yourself' };
+    }
+
+    if (actionType === 'super_like') {
+      const { data: allowed } = await supabase
+        .rpc('check_super_like_quota', { p_user_id: userId });
+      if (!allowed) {
+        return { success: false, error: 'QUOTA_EXCEEDED' };
+      }
     }
 
     // Use upsert to handle both insert and update cases
@@ -197,6 +208,17 @@ export async function checkMutualLike(
       const matchResult = await saveMatch(userId, likedUserId);
 
       if (matchResult.success) {
+        // Kick off icebreaker generation in the background.
+        // We deliberately do NOT await this — the match modal should open
+        // immediately. By the time the user taps into chat, the icebreaker
+        // will already be stored in user_matches.icebreaker_text.
+        if (matchResult.data?.id) {
+          generateAndSaveIcebreaker(matchResult.data.id).catch((err) => {
+            // Swallow — failure here never blocks the match flow
+            console.warn('[checkMutualLike] Icebreaker generation failed:', err);
+          });
+        }
+
         return {
           isMatch: true,
           channelId: matchResult.channelId,
@@ -261,6 +283,7 @@ export async function getUserMatches(): Promise<{
     // Map the results to include the other user's ID
     const matches = (data || []).map((match) => ({
       ...match,
+      matched_at: match.matched_at ?? new Date().toISOString(),
       other_user_id: match.user1_id === userId ? match.user2_id : match.user1_id,
     }));
 

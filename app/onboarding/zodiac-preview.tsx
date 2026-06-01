@@ -1,9 +1,11 @@
 import { saveAstroDetails } from '@/lib/astro-details';
+import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthAlert } from '@/lib/auth-alert-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -131,6 +133,34 @@ const getPersonalityDescription = (type: 'western' | 'vedic' | 'nakshatra', sign
   return null;
 };
 
+const enqueueSynastryPrewarm = (userId: string) => {
+  void (async () => {
+    try {
+      const { data, error } = await supabase.rpc('enqueue_synastry_prewarm', { p_user_id: userId });
+
+      if (error) {
+        console.warn('Synastry prewarm enqueue failed:', error.message);
+        return;
+      }
+
+      console.log('Synastry prewarm enqueue requested:', data);
+
+      const { error: invokeError } = await supabase.functions.invoke('process-synastry-prewarm', {
+        body: { batch_size: 10 },
+      });
+
+      if (invokeError) {
+        console.warn('Synastry prewarm processor trigger failed:', invokeError.message);
+      }
+    } catch (error: unknown) {
+      console.warn(
+        'Synastry prewarm enqueue threw:',
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  })();
+};
+
 const getVedicSymbol = (signName: string | null | undefined): string => {
   if (!signName) return '♈';
   const sign = signName.toLowerCase().trim();
@@ -163,6 +193,7 @@ export default function ZodiacPreviewScreen() {
   const params = useLocalSearchParams();
   const [isSaving, setIsSaving] = useState(false);
   const [selectedZodiacType, setSelectedZodiacType] = useState<'vedic' | 'western' | 'nakshatra'>('vedic');
+  const { showAlert } = useAuthAlert();
   
   // Animation values for transitions
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -328,16 +359,20 @@ export default function ZodiacPreviewScreen() {
       });
 
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to save astro details');
+        showAlert('Error', result.error || 'Failed to save astro details');
         setIsSaving(false);
         return;
       }
 
       console.log('✅ Astro details saved successfully');
+      const savedUserId = result.data?.user_id;
+      if (savedUserId) {
+        enqueueSynastryPrewarm(savedUserId);
+      }
       router.replace('/onboarding/onboarding_ques');
     } catch (error) {
       console.error('❌ Error saving astro details:', error);
-      Alert.alert('Error', 'Failed to save your details. Please try again.');
+      showAlert('Error', 'Failed to save your details. Please try again.');
       setIsSaving(false);
     }
   };
@@ -554,7 +589,7 @@ export default function ZodiacPreviewScreen() {
                   {isSaving ? (
                     <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
-                    <Text style={styles.arrowButtonText}>→</Text>
+                    <Text style={styles.arrowButtonText}>›</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -927,8 +962,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   arrowButtonText: {
-    color: COLORS.accent,
-    fontSize: 30,
-    fontWeight: '700',
-  },
+  color: COLORS.accent,
+  fontSize: 28,
+  fontWeight: '700',
+  lineHeight: 30,
+  textAlign: 'center',
+  textAlignVertical: 'center',
+  includeFontPadding: false,
+},
 });

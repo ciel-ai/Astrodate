@@ -82,7 +82,11 @@ export default function InsightsScreen() {
         language: 'en',
       });
 
-      setHoroscope(horoscopeData);
+      if (horoscopeData === null) {
+  setError('Horoscope service is currently unavailable. Please try again later.');
+} else {
+  setHoroscope(horoscopeData);
+}
     } catch (err: any) {
       console.error('Error fetching horoscope:', err);
       setError(err.message || 'Failed to fetch daily horoscope. Please try again.');

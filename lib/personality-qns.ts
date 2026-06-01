@@ -1,3 +1,4 @@
+import { invokeSupabaseFunctionWithTimeout } from './network';
 import { supabase } from './supabase';
 
 interface PersonalityQnsResponses {
@@ -25,17 +26,19 @@ export async function savePersonalityQnsResponses(
   responses: PersonalityQnsResponses
 ): Promise<void> {
   try {
-    const user = await supabase.auth.getUser();
-    if (!user.data.user) {
+    const { data } = await supabase.auth.getUser();
+    if (!data?.user) {
       console.error('No authenticated user found');
       throw new Error('User not authenticated');
     }
+
+    const userId = data.user.id;
 
     const { error } = await supabase
       .from('personality_qns')
       .upsert(
         {
-          user_id: user.data.user.id,
+          user_id: userId,
           ...responses,
         },
         { onConflict: 'user_id' }
@@ -52,11 +55,14 @@ export async function savePersonalityQnsResponses(
     // Call personality compute Edge Function to calculate and store personality vector
     // This is critical for matching algorithm but non-blocking for better UX
     try {
-      console.log('Invoking personality_compute function for user:', user.data.user.id);
-      
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('personality_compute', {
-        body: { user_id: user.data.user.id },
-      });
+      console.log('Invoking personality_compute function for user:', userId);
+
+      const { data: fnData, error: fnError } = await invokeSupabaseFunctionWithTimeout(
+        () => supabase.functions.invoke('personality_compute', {
+          body: { user_id: userId },
+        }),
+        20000
+      );
 
       if (fnError) {
         console.error('personality_compute function returned error:', fnError);
@@ -119,8 +125,8 @@ export async function getPersonalityQnsResponses(userId?: string): Promise<Perso
  */
 export async function deletePersonalityQnsResponses(): Promise<void> {
   try {
-    const user = await supabase.auth.getUser();
-    if (!user.data.user) {
+    const { data } = await supabase.auth.getUser();
+    if (!data?.user) {
       console.error('No authenticated user found');
       throw new Error('User not authenticated');
     }
@@ -128,7 +134,7 @@ export async function deletePersonalityQnsResponses(): Promise<void> {
     const { error } = await supabase
       .from('personality_qns')
       .delete()
-      .eq('user_id', user.data.user.id);
+      .eq('user_id', data.user.id);
 
     if (error) {
       console.error('Error deleting personality responses:', error);

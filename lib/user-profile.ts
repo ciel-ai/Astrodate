@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { TablesInsert, TablesUpdate } from './database.types';
 
 export interface UserProfile {
   user_id?: string;
@@ -168,7 +169,7 @@ export const saveUserProfile = async (profile: UserProfile) => {
 
     if (existingProfile) {
       // Update existing profile; only include phone_number when provided
-      const updatePayload: any = {
+      const updatePayload: TablesUpdate<'user_profiles'> = {
         full_name: profile.full_name,
         email: profile.email,
         gender: profile.gender || null,
@@ -188,8 +189,9 @@ export const saveUserProfile = async (profile: UserProfile) => {
         .single();
     } else {
       // Insert new profile; require phone_number only if provided
-      const insertPayload: any = {
+      const insertPayload: TablesInsert<'user_profiles'> = {
         user_id: userId,
+        phone_number: normalizedPhone ?? '',
         full_name: profile.full_name,
         email: profile.email,
         gender: profile.gender || null,

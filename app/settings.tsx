@@ -1,3 +1,6 @@
+import { useAuthAlert } from '@/lib/auth-alert-context';
+import { resendVerificationEmail } from '@/lib/email-auth';
+import { deactivateCurrentDevicePushToken, syncNotificationPreferences } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -6,22 +9,38 @@ import { useNavigation, useRouter } from 'expo-router';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
-  Alert,
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
+  const { showAlert } = useAuthAlert();
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  // ─── Email account state ────────────────────────────────────────────────────
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  const [isEmailVerified, setIsEmailVerified] = useState<boolean | null>(null);
+  const [emailAuthUser, setEmailAuthUser] = useState(false); // true if signed in with email+password
+  // Update email flow
+  const [showUpdateEmail, setShowUpdateEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [updateEmailLoading, setUpdateEmailLoading] = useState(false);
+  // Resend verification
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isLoggingOutRef = useRef(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -90,6 +109,11 @@ export default function SettingsScreen() {
           showAge,
         };
         await AsyncStorage.setItem('@app_settings', JSON.stringify(settingsToSave));
+        await syncNotificationPreferences({
+          new_matches_enabled: notificationsEnabled && matchNotifications,
+          new_messages_enabled: notificationsEnabled && messageNotifications,
+          marketing_enabled: notificationsEnabled && pushNotifications,
+        });
       } catch (error) {
         console.error('Error saving settings:', error);
       }
@@ -106,31 +130,105 @@ export default function SettingsScreen() {
     showAge,
   ]);
 
+  // Load email account info on mount
+  useEffect(() => {
+    const loadEmailInfo = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        setCurrentEmail(user.email ?? null);
+        setIsEmailVerified(!!user.email_confirmed_at);
+        // Determine if this user signed up with email+password (not Google/phone)
+        const identities = user.identities ?? [];
+        const hasEmailIdentity = identities.some((id: any) => id.provider === 'email');
+        setEmailAuthUser(hasEmailIdentity);
+      } catch (err) {
+        console.warn('[settings] Could not load email info:', err);
+      }
+    };
+    loadEmailInfo();
+    return () => {
+      if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    };
+  }, []);
+
+  const startCooldown = (seconds: number) => {
+    setResendCooldown(seconds);
+    if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
+    cooldownTimerRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) { clearInterval(cooldownTimerRef.current!); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleResendVerification = async () => {
+    if (resendLoading || resendCooldown > 0 || !currentEmail) return;
+    setResendLoading(true);
+    const result = await resendVerificationEmail(currentEmail, 'astrodate://auth/verify');
+    setResendLoading(false);
+    if (!result.success) {
+      if (result.cooldownSeconds) startCooldown(result.cooldownSeconds);
+      showAlert('Could Not Resend', result.error ?? 'Could not resend');
+    } else {
+      startCooldown(60);
+      showAlert('Verification Email Sent ✅', `A new link has been sent to ${currentEmail}. Check your inbox and spam folder.`);
+    }
+  };
+
+  const handleUpdateEmail = async () => {
+    const trimmed = newEmail.trim().toLowerCase();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      showAlert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+    if (trimmed === currentEmail) {
+      showAlert('Same Email', 'The new email is the same as your current one.');
+      return;
+    }
+    setUpdateEmailLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser(
+        { email: trimmed },
+        { emailRedirectTo: 'astrodate://auth/verify' }
+      );
+      if (error) {
+        showAlert('Update Failed', error.message);
+      } else {
+        setShowUpdateEmail(false);
+        setNewEmail('');
+        showAlert(
+          'Confirm Your New Email ✅',
+          `We sent a confirmation link to ${trimmed}. Tap it to complete the change. Your current email stays active until confirmed.`
+        );
+      }
+    } catch (err: any) {
+      showAlert('Update Failed', err?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setUpdateEmailLoading(false);
+    }
+  };
+
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase.auth.signOut();
-              if (error) {
-                Alert.alert('Logout Failed', error.message || 'Could not logout. Please try again.');
-                return;
-              }
-              router.replace('/onboarding/login');
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Logout Failed', 'Could not logout. Please try again.');
-            }
-          },
+    showAlert('Logout', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout', style: 'destructive',
+        onPress: async () => {
+          if (isLoggingOutRef.current) return;  // guard
+          isLoggingOutRef.current = true;
+          try {
+            await deactivateCurrentDevicePushToken();
+            await supabase.auth.signOut();
+            // navigation handled by SIGNED_OUT listener
+          } catch {
+            isLoggingOutRef.current = false;
+            showAlert('Logout Failed', 'Please try again.');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const getModalTitle = () => {
@@ -436,6 +534,136 @@ export default function SettingsScreen() {
         </View>
 
 
+
+        {/* Email & Account Security Section */}
+        {(currentEmail || emailAuthUser) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Email & Security</Text>
+            <View style={styles.settingsCard}>
+
+              {/* Current email display */}
+              <View style={styles.settingRow}>
+                <View style={styles.settingLeft}>
+                  <MaterialIcons name="email" size={24} color="#7C3AED" />
+                  <View style={styles.settingContent}>
+                    <Text style={styles.settingTitle}>Email Address</Text>
+                    <Text style={styles.settingSubtitle} numberOfLines={1}>
+                      {currentEmail ?? 'Not set'}
+                    </Text>
+                  </View>
+                </View>
+                {/* Verified / Unverified badge */}
+                {isEmailVerified !== null && (
+                  <View style={[
+                    styles.verifiedBadge,
+                    isEmailVerified ? styles.verifiedBadgeGreen : styles.verifiedBadgeAmber,
+                  ]}>
+                    <MaterialIcons
+                      name={isEmailVerified ? 'verified' : 'warning'}
+                      size={13}
+                      color={isEmailVerified ? '#10B981' : '#F59E0B'}
+                    />
+                    <Text style={[
+                      styles.verifiedBadgeText,
+                      { color: isEmailVerified ? '#10B981' : '#F59E0B' },
+                    ]}>
+                      {isEmailVerified ? 'Verified' : 'Unverified'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Resend verification — only shown when unverified */}
+              {isEmailVerified === false && (
+                <TouchableOpacity
+                  style={styles.settingRow}
+                  activeOpacity={0.7}
+                  disabled={resendLoading || resendCooldown > 0}
+                  onPress={handleResendVerification}
+                >
+                  <View style={styles.settingLeft}>
+                    <MaterialIcons name="mark-email-unread" size={24} color="#F59E0B" />
+                    <View style={styles.settingContent}>
+                      <Text style={[styles.settingTitle, { color: '#F59E0B' }]}>
+                        Resend Verification Email
+                      </Text>
+                      <Text style={styles.settingSubtitle}>
+                        {resendCooldown > 0
+                          ? `Wait ${resendCooldown}s before resending`
+                          : 'Tap to send a new verification link'}
+                      </Text>
+                    </View>
+                  </View>
+                  {resendLoading
+                    ? <ActivityIndicator size="small" color="#F59E0B" />
+                    : <MaterialIcons name="chevron-right" size={24} color="#F59E0B" />}
+                </TouchableOpacity>
+              )}
+
+              {/* Update email — only for email+password users */}
+              {emailAuthUser && (
+                <>
+                  <TouchableOpacity
+                    style={showUpdateEmail ? styles.settingRow : [styles.settingRow, styles.settingRowLast]}
+                    activeOpacity={0.7}
+                    onPress={() => { setShowUpdateEmail(!showUpdateEmail); setNewEmail(''); }}
+                  >
+                    <View style={styles.settingLeft}>
+                      <MaterialIcons name="edit" size={24} color="#7C3AED" />
+                      <View style={styles.settingContent}>
+                        <Text style={styles.settingTitle}>Update Email Address</Text>
+                        <Text style={styles.settingSubtitle}>Change the email on your account</Text>
+                      </View>
+                    </View>
+                    <MaterialIcons
+                      name={showUpdateEmail ? 'expand-less' : 'chevron-right'}
+                      size={24}
+                      color="#7C3AED"
+                    />
+                  </TouchableOpacity>
+
+                  {showUpdateEmail && (
+                    <View style={[styles.updateEmailForm, styles.settingRowLast]}>
+                      <TextInput
+                        value={newEmail}
+                        onChangeText={(t) => setNewEmail(t.toLowerCase().trim())}
+                        placeholder="New email address"
+                        placeholderTextColor="rgba(255,255,255,0.35)"
+                        style={styles.textInput}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        autoFocus
+                      />
+                      <View style={styles.updateEmailButtons}>
+                        <TouchableOpacity
+                          style={styles.cancelBtn}
+                          onPress={() => { setShowUpdateEmail(false); setNewEmail(''); }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.cancelBtnText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.confirmBtn, (!newEmail || updateEmailLoading) && styles.confirmBtnDisabled]}
+                          onPress={handleUpdateEmail}
+                          disabled={!newEmail || updateEmailLoading}
+                          activeOpacity={0.8}
+                        >
+                          {updateEmailLoading
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Text style={styles.confirmBtnText}>Send Confirmation</Text>}
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.updateEmailHint}>
+                        A confirmation link will be sent to your new address. Your current email remains active until confirmed.
+                      </Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Account Section */}
         <View style={styles.section}>
@@ -832,5 +1060,73 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
+  },
+  // Email & Security section
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  verifiedBadgeGreen: {
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderColor: 'rgba(16,185,129,0.3)',
+  },
+  verifiedBadgeAmber: {
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderColor: 'rgba(245,158,11,0.3)',
+  },
+  verifiedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  updateEmailForm: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  updateEmailButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  cancelBtnText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  confirmBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#7C3AED',
+  },
+  confirmBtnDisabled: {
+    opacity: 0.45,
+  },
+  confirmBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  updateEmailHint: {
+    marginTop: 10,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.4)',
+    lineHeight: 17,
   },
 });

@@ -1,21 +1,21 @@
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import { saveUserProfile } from '@/lib/user-profile';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { memo, useEffect, useMemo, useState } from 'react';
+import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -29,27 +29,27 @@ type GenderDetailOption = {
 
 type StepConfig =
   | {
-      id: 'fullName' | 'location';
-      title: string;
-      subtitle: string;
-      placeholder: string;
-      keyboardType?: 'default';
-      helper?: string;
-    }
+    id: 'fullName' | 'location';
+    title: string;
+    subtitle: string;
+    placeholder: string;
+    keyboardType?: 'default';
+    helper?: string;
+  }
   | {
-      id: 'email';
-      title: string;
-      subtitle: string;
-      placeholder: string;
-      keyboardType?: 'email-address';
-      helper?: string;
-    }
+    id: 'email';
+    title: string;
+    subtitle: string;
+    placeholder: string;
+    keyboardType?: 'email-address';
+    helper?: string;
+  }
   | {
-      id: 'gender';
-      title: string;
-      subtitle: string;
-      helper?: string;
-    };
+    id: 'gender';
+    title: string;
+    subtitle: string;
+    helper?: string;
+  };
 
 const GENDER_OPTIONS: { id: GenderOption; label: string }[] = [
   { id: 'male', label: 'Man' },
@@ -115,12 +115,20 @@ export default function BasicDetailsScreen() {
   const [thanksVisible, setThanksVisible] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const isMountedRef = React.useRef(true);
+  const { showAlert } = useAuthAlert();
 
   const phoneNumber = params.phone || '';
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const steps: StepConfig[] = useMemo(
     () => [
@@ -243,9 +251,28 @@ export default function BasicDetailsScreen() {
       });
 
       if (!result.success) {
-        console.error('❌ Failed to save profile:', result.error);
-        Alert.alert('Error', result.error || 'Failed to save profile. Please try again.');
-        setIsSaving(false);
+        // Use console.warn instead of console.error to prevent Expo's duplicate error toast in dev mode
+        console.warn('⚠️ Failed to save profile:', result.error);
+        
+        if (result.error?.includes('Phone number is required')) {
+          showAlert(
+            'Error',
+            result.error,
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  if (isMountedRef.current) setIsSaving(false);
+                  // Redirect to phone login screen to complete verification
+                  router.replace('/onboarding/login');
+                }
+              }
+            ]
+          );
+        } else {
+          showAlert('Error', result.error || 'Failed to save profile. Please try again.');
+          if (isMountedRef.current) setIsSaving(false);
+        }
         return;
       }
 
@@ -253,10 +280,10 @@ export default function BasicDetailsScreen() {
       router.push('/onboarding/birth-details');
     } catch (error) {
       console.warn('Failed to persist basic details', error);
-      Alert.alert('Error', 'Failed to save your details. Please try again.');
-      setIsSaving(false);
+      showAlert('Error', 'Failed to save your details. Please try again.');
+      if (isMountedRef.current) setIsSaving(false);
     } finally {
-      setIsSaving(false);
+      if (isMountedRef.current) setIsSaving(false);
     }
   };
 
@@ -275,8 +302,8 @@ export default function BasicDetailsScreen() {
       setLocationLoading(true);
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Location permission required to auto-fill.');
-        setLocationLoading(false);
+        showAlert('Permission denied', 'Location permission required to auto-fill.');
+        if (isMountedRef.current) setLocationLoading(false);
         return;
       }
       let loc = await Location.getCurrentPositionAsync({});
@@ -286,12 +313,12 @@ export default function BasicDetailsScreen() {
         const cityLine = [city, region, country].filter(Boolean).join(', ');
         setLocation(cityLine);
       } else {
-        Alert.alert('Location Error', 'Could not determine your city.');
+        showAlert('Location Error', 'Could not determine your city.');
       }
     } catch (e) {
-      Alert.alert('Error', 'Failed to get location. Please try again.');
+      showAlert('Error', 'Failed to get location. Please try again.');
     } finally {
-      setLocationLoading(false);
+      if (isMountedRef.current) setLocationLoading(false);
     }
   };
 

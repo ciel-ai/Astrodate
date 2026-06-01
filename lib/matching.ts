@@ -1,6 +1,9 @@
 import { getAstroDetails } from './astro-details';
+import { getStandouts } from '@/lib/daily-picks';
+import { invokeSupabaseFunctionWithTimeout } from './network';
 import { supabase } from './supabase';
 import { getUserPhotos } from './user-photos';
+import type { Tables } from './database.types';
 
 export interface FinalMatchResult {
   match_user_id: string;
@@ -18,6 +21,9 @@ export interface FinalMatchResult {
   personality_vector?: string | number[];
 }
 
+type UserPreferenceFields = Pick<Tables<'user_preferences'>, 'min_age' | 'max_age' | 'max_distance' | 'location' | 'gender_preference' | 'sexual_orientation'>;
+type ProfileLocationField = Pick<Tables<'user_profiles'>, 'location'>;
+
 export interface DiscoveryPreferences {
   min_age: number;
   max_age: number;
@@ -27,36 +33,6 @@ export interface DiscoveryPreferences {
   sexual_orientation?: string | null;
 }
 
-export async function fetchPersonalityMatches(targetUserId?: string) {
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-
-    if (!sessionData?.session?.user?.id) {
-      console.log('❌ No user session found');
-      return null;
-    }
-
-    const userId = sessionData.session.user.id;
-    const bodyPayload: any = { input_user_id: userId, user_id: userId };
-    if (targetUserId) {
-      bodyPayload.target_user_id = targetUserId;
-    }
-
-    const { data, error } = await supabase.functions.invoke('personality_compute', {
-      body: bodyPayload,
-    });
-
-    if (error) {
-      console.log('❌ Edge Function Error:', error);
-      return null;
-    }
-
-    return data || null;
-  } catch (error) {
-    console.error('❌ Unexpected error fetching personality matches:', error);
-    return null;
-  }
-}
 
 /**
  * Checks if a user has completed the full onboarding flow
@@ -123,117 +99,27 @@ export async function fetchFinalMatches(userIdOverride?: string) {
       console.warn('⚠️ [fetchFinalMatches] User astro details missing or error:', astroCheck.error);
     }
 
-    // Call using the expected parameter name from your SQL: input_user_id
     const { data, error } = await supabase.rpc('get_final_matches', {
       input_user_id: userId,
     });
-    if (error) {
-      console.log('❌ RPC ERROR (get_final_matches):', error.message, error);
-      return [] as FinalMatchResult[];
+    
+    if (error || !data || data.length === 0) {
+      if (error) console.log('❌ RPC ERROR (get_final_matches):', error.message, error);
+      
+      const { data: fallbackData } = await supabase.rpc('get_fallback_feed', {
+        input_user_id: userId,
+      });
+      return fallbackData ?? [];
     }
 
-    // Skip the RLS-failing hasCompletedOnboarding check and directly return the fetched matches.
-    const completedOnboarding = data || [];
-
-    return completedOnboarding;
+    return data;
   } catch (error) {
     console.error('❌ Unexpected error fetching final matches:', error);
     return [] as FinalMatchResult[];
   }
 }
 
-export async function fetchAllRegisteredUsers() {
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const currentUserId = sessionData?.session?.user?.id;
 
-    // Grab all users from user_profiles table
-    const { data: profiles, error } = await supabase
-      .from('user_profiles')
-      .select('user_id, full_name, gender, location, created_at, personality_vector');
-
-    if (error) {
-      console.error('❌ Error fetching registered users:', error);
-      return [] as FinalMatchResult[];
-    }
-
-    const profileList = profiles || [];
-
-    // Fetch birth dates for age calculation
-    const profileUserIds = profileList.map((p: any) => p.user_id).filter(Boolean);
-    const ageMap = new Map<string, number>();
-
-    if (profileUserIds.length > 0) {
-      const { data: astroRows, error: astroError } = await supabase
-        .from('astro_details')
-        .select('user_id, birth_date')
-        .in('user_id', profileUserIds);
-
-      if (astroError) {
-        console.warn('⚠️ Error fetching astro_details for ages:', astroError);
-      } else if (astroRows) {
-        const today = new Date();
-        for (const row of astroRows as any[]) {
-          if (!row.birth_date) continue;
-          const birth = new Date(row.birth_date);
-          if (Number.isNaN(birth.getTime())) continue;
-          let age = today.getFullYear() - birth.getFullYear();
-          const m = today.getMonth() - birth.getMonth();
-          if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-            age--;
-          }
-          ageMap.set(row.user_id, age);
-        }
-      }
-    }
-
-    // Fetch IDs the current user has already acted on
-    const actedUserIds = new Set<string>();
-    if (currentUserId) {
-      const { data: swipes } = await supabase
-        .from('swipe_actions')
-        .select('target_user_id')
-        .eq('user_id', currentUserId);
-      if (swipes) {
-        for (const s of swipes as any[]) {
-          if (s.target_user_id) actedUserIds.add(s.target_user_id);
-        }
-      }
-    }
-
-    const registeredUsers: FinalMatchResult[] = [];
-
-    for (const p of profileList) {
-      // Exclude self if possible
-      if (currentUserId && p.user_id === currentUserId) continue;
-
-      // Exclude users already acted upon (liked, disliked, superliked)
-      if (actedUserIds.has(p.user_id)) continue;
-
-      const computedAge = ageMap.get(p.user_id);
-
-      registeredUsers.push({
-        match_user_id: p.user_id,
-        full_name: p.full_name,
-        gender: p.gender || 'Unknown',
-        age: typeof computedAge === 'number' ? computedAge : undefined as any,
-        location: p.location || 'Unknown',
-        personality_score: 0,
-        indian_score: 0,
-        western_score: 0,
-        final_match_score: 0,
-        indian_recommendation: null,
-        western_report: null,
-        personality_vector: p.personality_vector,
-      });
-    }
-
-    return registeredUsers;
-  } catch (err) {
-    console.error('❌ Unexpected error fetching all registered users:', err);
-    return [] as FinalMatchResult[];
-  }
-}
 
 export async function getDiscoveryPreferences(): Promise<DiscoveryPreferences | null> {
   try {
@@ -256,8 +142,8 @@ export async function getDiscoveryPreferences(): Promise<DiscoveryPreferences | 
         .maybeSingle(),
     ]);
 
-    const prefs = prefsResult.data as any | null;
-    const profile = profileResult.data as any | null;
+    const prefs: UserPreferenceFields | null = prefsResult.data;
+    const profile: ProfileLocationField | null = profileResult.data;
 
     const min_age = prefs?.min_age ?? 18;
     const max_age = prefs?.max_age ?? 65;
@@ -276,3 +162,5 @@ export async function getDiscoveryPreferences(): Promise<DiscoveryPreferences | 
     return null;
   }
 }
+
+export { getStandouts };
