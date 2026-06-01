@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { Json } from './database.types';
 
 export interface AstroDetails {
   user_id?: string;
@@ -14,6 +15,12 @@ export interface AstroDetails {
   western_sign?: string;
   indian_sign?: string;
   nakshatra_name?: string;
+  venus_sign?: string;
+  mars_sign?: string;
+  mercury_sign?: string;
+  rising_sign?: string;
+  dominant_element?: string;
+  chart_json?: Json;
 }
 
 /**
@@ -41,7 +48,7 @@ export const saveAstroDetails = async (details: AstroDetails) => {
       .from('astro_details')
       .select('id')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     let result;
 
@@ -58,11 +65,17 @@ export const saveAstroDetails = async (details: AstroDetails) => {
           western_sign: details.western_sign || null,
           indian_sign: details.indian_sign || null,
           nakshatra_name: details.nakshatra_name || null,
+          venus_sign: details.venus_sign ?? null,
+          mars_sign: details.mars_sign ?? null,
+          mercury_sign: details.mercury_sign ?? null,
+          rising_sign: details.rising_sign ?? null,
+          dominant_element: details.dominant_element ?? null,
+          chart_json: details.chart_json ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq('user_id', userId)
         .select()
-        .single();
+        .maybeSingle();
     } else {
       // Insert new details
       result = await supabase
@@ -77,9 +90,15 @@ export const saveAstroDetails = async (details: AstroDetails) => {
           western_sign: details.western_sign || null,
           indian_sign: details.indian_sign || null,
           nakshatra_name: details.nakshatra_name || null,
+          venus_sign: details.venus_sign ?? null,
+          mars_sign: details.mars_sign ?? null,
+          mercury_sign: details.mercury_sign ?? null,
+          rising_sign: details.rising_sign ?? null,
+          dominant_element: details.dominant_element ?? null,
+          chart_json: details.chart_json ?? null,
         })
         .select()
-        .single();
+        .maybeSingle();
     }
 
     if (result.error) {

@@ -1,7 +1,9 @@
 import { getAstroDetails } from '@/lib/astro-details';
 import { getSection1Responses, saveSection1Responses } from '@/lib/onboarding-responses';
-import { getMembershipOrFree, type MembershipSummary } from '@/lib/subscription';
+import { getMembershipOrFree, getPlanCatalog, type MembershipSummary } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
+import { useSubscriptionPayment } from '@/lib/useSubscriptionPayment';
+import { SubscriptionStatusBanner } from '@/components/SubscriptionStatusBanner';
 import { deleteUserPhoto, getUserPhotos } from '@/lib/user-photos';
 import { getUserProfile, saveUserProfile } from '@/lib/user-profile';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,10 +15,8 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {  ActivityIndicator,
   Modal,
   Platform,
   RefreshControl,
@@ -28,6 +28,7 @@ import {
   UIManager,
   View
 } from 'react-native';
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -183,12 +184,53 @@ export default function ProfileScreen() {
   const [showAgeSetting, setShowAgeSetting] = useState(true);
   const [section1InterestValues, setSection1InterestValues] = useState<string[]>([]);
   const [locationLoading, setLocationLoading] = useState(false);
+  const isMountedRef = useRef(true);
+  const { showAlert } = useAuthAlert();
+
+  // ── BUG-07: subscription payment with race-condition-safe verification ──────
+  const { paymentStatus, paymentError, startPayment, resetPayment } =
+    useSubscriptionPayment();
+
+  const [planCatalog, setPlanCatalog] = useState<
+    Awaited<ReturnType<typeof getPlanCatalog>>
+  >(null);
+
+  useEffect(() => {
+    getPlanCatalog().then(setPlanCatalog);
+  }, []);
+
+  const handleSubscribe = async (planId: string, planName: string, amountPaise: number) => {
+    const userResult = await supabase.auth.getUser();
+    const user = userResult?.data?.user;
+    if (!user) {
+      showAlert('Not Signed In', 'Please sign in to subscribe.');
+      return;
+    }
+    await startPayment({
+      planId,
+      planName,
+      amountPaise,
+      userId: user.id,
+      userEmail: user.email,
+    });
+    // On success, refresh membership badge
+    if (paymentStatus === 'active') {
+      fetchMembership();
+    }
+  };
+  // ────────────────────────────────────────────────────────────────────────────
 
   // Floating animation for photo glow
   const glowScale = useSharedValue(1);
 
   // Stars are defined at module level as STAR_DATA — no useMemo needed
   const stars = STAR_DATA;
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     glowScale.value = withRepeat(
@@ -247,25 +289,25 @@ export default function ProfileScreen() {
 
   const fetchMembership = async () => {
     try {
-      setMembershipLoading(true);
+      if (isMountedRef.current) setMembershipLoading(true);
       const current = await getMembershipOrFree();
-      setMembership(current);
+      if (isMountedRef.current) setMembership(current);
     } catch (err) {
       console.error('Error fetching membership:', err);
     } finally {
-      setMembershipLoading(false);
+      if (isMountedRef.current) setMembershipLoading(false);
     }
   };
 
   // Handle pull-to-refresh
   const onRefresh = async () => {
     try {
-      setRefreshing(true);
+      if (isMountedRef.current) setRefreshing(true);
       await Promise.all([fetchUserData(), fetchMembership(), loadSettings()]);
     } catch (err) {
       console.error('Refresh error:', err);
     } finally {
-      setRefreshing(false);
+      if (isMountedRef.current) setRefreshing(false);
     }
   };
 
@@ -275,7 +317,7 @@ export default function ProfileScreen() {
       if (storedSettingsStr) {
         const storedSettings = JSON.parse(storedSettingsStr);
         if (storedSettings.showAge !== undefined) {
-          setShowAgeSetting(storedSettings.showAge);
+          if (isMountedRef.current) setShowAgeSetting(storedSettings.showAge);
         }
       }
     } catch (error) {
@@ -288,7 +330,7 @@ export default function ProfileScreen() {
 
   const fetchUserData = async () => {
     try {
-      setLoading(true);
+      if (isMountedRef.current) setLoading(true);
 
       // Fetch all data in parallel for better performance
       const [profileResult, photosResult, astroResult, section1Result] = await Promise.all([
@@ -297,6 +339,7 @@ export default function ProfileScreen() {
         getAstroDetails(),
         getSection1Responses(),
       ]);
+      if (!isMountedRef.current) return;
 
       // Fetch user profile
       if (profileResult.success && profileResult.data) {
@@ -405,13 +448,16 @@ export default function ProfileScreen() {
       }
 
       // Fetch onboarding responses for bio/about me
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
+      if (!isMountedRef.current) return;
       if (user) {
         const { data: onboardingData, error: onboardingError } = await supabase
           .from('onboarding_responses')
           .select('*')
           .eq('user_id', user.id)
           .single();
+        if (!isMountedRef.current) return;
 
         // Only update if data exists and no error (error is expected if table doesn't exist or no data)
         if (!onboardingError && onboardingData) {
@@ -463,9 +509,9 @@ export default function ProfileScreen() {
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
-      Alert.alert('Error', 'Failed to load profile data. Please try again.');
+      if (isMountedRef.current) showAlert('Error', 'Failed to load profile data. Please try again.');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
   const [showInterestPicker, setShowInterestPicker] = useState(false);
@@ -480,16 +526,20 @@ export default function ProfileScreen() {
 
   const handleGetLocation = async () => {
     try {
-      setLocationLoading(true);
+      if (isMountedRef.current) setLocationLoading(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
+      if (!isMountedRef.current) return;
 
       if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Location permission is required to auto-fill your location.');
+        if (isMountedRef.current) {
+          showAlert('Permission denied', 'Location permission is required to auto-fill your location.');
+        }
         return;
       }
 
       const loc = await Location.getCurrentPositionAsync({});
       const geocode = await Location.reverseGeocodeAsync(loc.coords);
+      if (!isMountedRef.current) return;
 
       if (geocode && geocode.length > 0) {
         const first = geocode[0];
@@ -505,33 +555,40 @@ export default function ProfileScreen() {
           ...prev,
           location: cityLine || `${loc.coords.latitude.toFixed(4)}, ${loc.coords.longitude.toFixed(4)}`,
         }));
-      } else {
-        Alert.alert('Location Error', 'Could not determine your city.');
+      } else if (isMountedRef.current) {
+        showAlert('Location Error', 'Could not determine your city.');
       }
     } catch (error) {
       console.error('Error getting location:', error);
-      Alert.alert('Error', 'Failed to get location. Please try again.');
+      if (isMountedRef.current) showAlert('Error', 'Failed to get location. Please try again.');
     } finally {
-      setLocationLoading(false);
+      if (isMountedRef.current) setLocationLoading(false);
     }
   };
 
   const handleSave = async () => {
     try {
-      setLoading(true);
+      if (isMountedRef.current) setLoading(true);
 
       // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
+      const userError = userResult?.error;
+      if (!isMountedRef.current) return;
       if (userError || !user) {
-        Alert.alert('Error', 'User not authenticated');
-        setLoading(false);
+        if (isMountedRef.current) {
+          showAlert('Error', 'User not authenticated');
+          setLoading(false);
+        }
         return;
       }
 
       // Save user profile (name, location) while preserving required DB fields
       if (!profileDbFields?.phone_number || !profileDbFields?.email) {
-        Alert.alert('Profile data missing', 'Phone number or email is missing in your account. Please complete onboarding first.');
-        setLoading(false);
+        if (isMountedRef.current) {
+          showAlert('Profile data missing', 'Phone number or email is missing in your account. Please complete onboarding first.');
+          setLoading(false);
+        }
         return;
       }
 
@@ -543,10 +600,13 @@ export default function ProfileScreen() {
         gender_detail: profileDbFields.gender_detail || undefined,
         location: editedProfile.location || undefined,
       });
+      if (!isMountedRef.current) return;
 
       if (!profileResult.success) {
-        Alert.alert('Error', profileResult.error || 'Failed to save profile');
-        setLoading(false);
+        if (isMountedRef.current) {
+          showAlert('Error', profileResult.error || 'Failed to save profile');
+          setLoading(false);
+        }
         return;
       }
 
@@ -557,6 +617,7 @@ export default function ProfileScreen() {
         height: editedProfile.height || undefined,
         hobbies: editedProfile.interests || [],
       });
+      if (!isMountedRef.current) return;
 
       if (!section1Result.success) {
         console.warn('Warning: Failed to save some preferences:', section1Result.error);
@@ -578,6 +639,7 @@ export default function ProfileScreen() {
         .upsert(onboardingPayload, {
           onConflict: 'user_id'
         });
+      if (!isMountedRef.current) return;
 
       if (onboardingError) {
         // Fallback for environments where onboarding_responses has fewer columns.
@@ -590,21 +652,24 @@ export default function ProfileScreen() {
           }, {
             onConflict: 'user_id'
           });
+        if (!isMountedRef.current) return;
         if (fallbackError) {
           console.warn('Warning: Failed to save onboarding profile fields:', fallbackError);
         }
       }
 
-      Alert.alert('Success', 'Profile updated successfully!');
-      setShowEditModal(false);
+      if (isMountedRef.current) {
+        showAlert('Success', 'Profile updated successfully!');
+        setShowEditModal(false);
+      }
 
       // Refresh data from database after saving
       await fetchUserData();
     } catch (error) {
       console.error('Error saving profile:', error);
-      Alert.alert('Error', 'Failed to save profile. Please try again.');
+      if (isMountedRef.current) showAlert('Error', 'Failed to save profile. Please try again.');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -627,18 +692,19 @@ export default function ProfileScreen() {
 
   const handleRemovePhoto = async (photoId: string) => {
     try {
-      setLoading(true);
+      if (isMountedRef.current) setLoading(true);
       const result = await deleteUserPhoto(photoId);
+      if (!isMountedRef.current) return;
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to remove photo');
+        showAlert('Error', result.error || 'Failed to remove photo');
         return;
       }
       await fetchUserData();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      Alert.alert('Error', message);
+      if (isMountedRef.current) showAlert('Error', message);
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -1040,6 +1106,100 @@ export default function ProfileScreen() {
             </BlurView>
           ) : null}
         </View>
+
+        {/* ── BUG-07: Payment verification banner ─────────────────────────────
+             Appears only while a Razorpay payment is in flight or just settled.
+             'creating' / 'browser' / 'pending' → spinner + "Verifying…"
+             'active'  → green success (then resetPayment() to dismiss)
+             'failed'  → amber "Still Verifying" with support contact
+        ──────────────────────────────────────────────────────────────────── */}
+        {paymentStatus !== 'idle' && (
+          <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+            <SubscriptionStatusBanner status={paymentStatus} error={paymentError} />
+            {paymentStatus === 'active' && (
+              <TouchableOpacity
+                onPress={() => { resetPayment(); fetchMembership(); }}
+                activeOpacity={0.7}
+                style={styles.subscriptionCtaButton}>
+                <MaterialIcons name="check-circle" size={18} color="#1E103A" />
+                <Text style={styles.subscriptionCtaButtonText}>Done</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* ── Subscription Plans ───────────────────────────────────────────────
+             Shown only when the user is not yet on an active paid plan.
+             Renders the live plan_catalog rows fetched from Supabase.
+        ──────────────────────────────────────────────────────────────────── */}
+        {!membership?.is_active && planCatalog && planCatalog.length > 0 && (
+          <View style={[styles.subscriptionInlineSection, { paddingHorizontal: 16 }]}>
+            <View style={styles.subscriptionHero}>
+              <View style={styles.subscriptionLogoCircle}>
+                <MaterialIcons name="auto-awesome" size={28} color="#F4D35E" />
+              </View>
+              <Text style={styles.subscriptionHeroTitle}>Unlock Premium</Text>
+              <Text style={styles.subscriptionHeroSubtitle}>
+                Get deeper astrological insights, unlimited likes, and see who liked you.
+              </Text>
+            </View>
+
+            <View style={styles.subscriptionCards}>
+              {planCatalog.map((plan, idx) => {
+                const isHighlighted = plan.plan_slug === 'cosmic-annual';
+                const priceRupees = (plan.amount_paise / 100).toLocaleString('en-IN');
+                const intervalLabel =
+                  plan.interval === 'monthly' ? '/ month' :
+                  plan.interval === 'annual'  ? '/ year'  :
+                  plan.interval === 'lifetime' ? 'one-time' : '';
+                const isThisPlanLoading =
+                  (paymentStatus === 'creating' || paymentStatus === 'browser' || paymentStatus === 'pending');
+
+                return (
+                  <View
+                    key={plan.id}
+                    style={[styles.subscriptionCard, isHighlighted && styles.subscriptionCardActive]}>
+                    <View style={styles.subscriptionCardHeader}>
+                      <View style={styles.subscriptionCardTitleRow}>
+                        <Text style={styles.subscriptionCardTitle}>{plan.plan_badge}</Text>
+                        {isHighlighted && (
+                          <View style={styles.subscriptionBadgeTag}>
+                            <Text style={styles.subscriptionBadgeTagText}>BEST VALUE</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.subscriptionPrice}>₹{priceRupees} {intervalLabel}</Text>
+                    </View>
+
+                    <Text style={styles.subscriptionTagline}>{plan.plan_name}</Text>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.subscriptionCtaButton,
+                        isThisPlanLoading && { opacity: 0.6 },
+                      ]}
+                      disabled={isThisPlanLoading}
+                      onPress={() => handleSubscribe(plan.id, plan.plan_name, plan.amount_paise)}
+                      activeOpacity={0.85}>
+                      {isThisPlanLoading ? (
+                        <ActivityIndicator size="small" color="#1E103A" />
+                      ) : (
+                        <>
+                          <MaterialIcons name="auto-awesome" size={18} color="#1E103A" />
+                          <Text style={styles.subscriptionCtaButtonText}>Get {plan.plan_name}</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={styles.subscriptionDisclaimer}>
+              Payments are processed securely via Razorpay. Subscriptions are non-refundable.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>

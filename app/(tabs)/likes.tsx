@@ -3,6 +3,7 @@ import { fetchFinalMatches } from '@/lib/matching';
 import { supabase } from '@/lib/supabase';
 import { getUserPhotos } from '@/lib/user-photos';
 import { getUserProfile } from '@/lib/user-profile';
+import { getMembershipOrFree } from '@/lib/subscription';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
@@ -41,6 +42,7 @@ export default function LikesScreen() {
   const [superlikesData, setSuperlikesData] = useState<LikeProfile[]>([]);
   const [likesSentData, setLikesSentData] = useState<LikeProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canSeeWhoLikedMe, setCanSeeWhoLikedMe] = useState(false);
 
   // Stars are defined at module level as STAR_DATA — no useMemo needed
   const stars = STAR_DATA;
@@ -59,8 +61,81 @@ export default function LikesScreen() {
     return `${diffDays}d ago`;
   };
 
+  const batchFetchProfilesForRefresh = async (
+    userIds: string[],
+    matchesResult: any[]
+  ): Promise<Record<string, any>> => {
+    if (userIds.length === 0) return {};
+
+    const calcAge = (birthDate: string): number | undefined => {
+      const bd = new Date(birthDate);
+      const today = new Date();
+      let age = today.getFullYear() - bd.getFullYear();
+      const m = today.getMonth() - bd.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < bd.getDate())) age--;
+      return age;
+    };
+
+    const [profilesRes, astroRes, photosRes] = await Promise.all([
+      supabase
+        .from('user_profiles')
+        .select('user_id, full_name, location')
+        .in('user_id', userIds),
+      supabase
+        .from('astro_details')
+        .select('user_id, birth_date')
+        .in('user_id', userIds),
+      supabase
+        .from('user_photos')
+        .select('user_id, photo_url, is_primary')
+        .in('user_id', userIds),
+    ]);
+
+    const profileMap: Record<string, any> = {};
+    for (const p of (profilesRes.data ?? [])) profileMap[p.user_id] = p;
+
+    const astroMap: Record<string, any> = {};
+    for (const a of (astroRes.data ?? [])) astroMap[a.user_id] = a;
+
+    const photosMap: Record<string, any[]> = {};
+    for (const ph of (photosRes.data ?? [])) {
+      if (!ph.user_id) continue;
+      if (!photosMap[ph.user_id]) photosMap[ph.user_id] = [];
+      photosMap[ph.user_id].push(ph);
+    }
+
+    const result: Record<string, any> = {};
+    for (const userId of userIds) {
+      const profile = profileMap[userId];
+      if (!profile) continue;
+      const astro = astroMap[userId];
+      const photos = photosMap[userId] ?? [];
+      const primaryPhoto = photos.find((p) => p.is_primary) || photos[0] || null;
+      const match = matchesResult.find((m: any) => m.match_user_id === userId);
+
+      result[userId] = {
+        id: userId,
+        name: profile.full_name || 'User',
+        age: astro?.birth_date ? calcAge(astro.birth_date) : undefined,
+        distance: profile.location || 'Location not set',
+        compatibility: match ? Math.round(Number(match.final_match_score ?? 0)) : undefined,
+        image: primaryPhoto?.photo_url
+          ? { uri: primaryPhoto.photo_url }
+          : require('@/assets/images/avatar-placeholder.png'),
+      };
+    }
+    return result;
+  };
+
   // Fetch likes data
   useEffect(() => {
+    let mounted = true;
+
+    getMembershipOrFree().then((m) => {
+      const features = m.features as any;
+      if (mounted) setCanSeeWhoLikedMe(!!features?.see_who_liked_me && m.is_active);
+    }).catch(() => {});
+
     // Helper: calculate age from ISO birth_date string
     const calcAge = (birthDate: string): number | undefined => {
       const bd = new Date(birthDate);
@@ -105,6 +180,7 @@ export default function LikesScreen() {
 
       const photosMap: Record<string, any[]> = {};
       for (const ph of (photosRes.data ?? [])) {
+        if (!ph.user_id) continue;
         if (!photosMap[ph.user_id]) photosMap[ph.user_id] = [];
         photosMap[ph.user_id].push(ph);
       }
@@ -135,7 +211,7 @@ export default function LikesScreen() {
 
     const fetchLikesData = async () => {
       try {
-        setLoading(true);
+        if (mounted) setLoading(true);
         const { data: sessionData } = await supabase.auth.getSession();
         const currentUserId = sessionData?.session?.user?.id;
         const matchesResult = await fetchFinalMatches();
@@ -199,7 +275,7 @@ export default function LikesScreen() {
             return { ...p, likedTime: createdAt ? formatTimeAgo(createdAt) : undefined };
           })
           .filter(Boolean) as LikeProfile[];
-        setLikesData(likesProfiles);
+        if (mounted) setLikesData(likesProfiles);
 
         // Map superlikes received
         const superlikedProfiles = Array.from(latestSuperlikeMap.entries())
@@ -209,7 +285,7 @@ export default function LikesScreen() {
             return { ...p, likedTime: createdAt ? formatTimeAgo(createdAt) : undefined };
           })
           .filter(Boolean) as LikeProfile[];
-        setSuperlikesData(superlikedProfiles);
+        if (mounted) setSuperlikesData(superlikedProfiles);
 
         // Map sent likes/superlikes
         const sentProfiles = Array.from(latestSentMap.entries())
@@ -223,30 +299,32 @@ export default function LikesScreen() {
             };
           })
           .filter(Boolean) as LikeProfile[];
-        setLikesSentData(sentProfiles);
+        if (mounted) setLikesSentData(sentProfiles);
 
       } catch (error) {
         console.error('Error fetching likes data:', error);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     fetchLikesData();
+    return () => { mounted = false; };
   }, []);
 
   // Refresh Likes sent every time the tab is opened
   useEffect(() => {
     if (selectedTab !== 'sent') return;
+    let mounted = true;
 
     const fetchLatestSentLikes = async () => {
       try {
-        setLoading(true);
+        if (mounted) setLoading(true);
 
         const { data: sessionData } = await supabase.auth.getSession();
         const currentUserId = sessionData?.session?.user?.id;
         if (!currentUserId) {
-          setLikesSentData([]);
+          if (mounted) setLikesSentData([]);
           return;
         }
 
@@ -259,7 +337,7 @@ export default function LikesScreen() {
           .order('updated_at', { ascending: false });
 
         if (sentRowsError || !sentRows) {
-          setLikesSentData([]);
+          if (mounted) setLikesSentData([]);
           return;
         }
 
@@ -276,7 +354,7 @@ export default function LikesScreen() {
 
         // Use batch fetch instead of N+1 per-user calls
         const sentUserIds = Array.from(latestSentByUser.keys());
-        const profileData = await batchFetchProfiles(sentUserIds, matchesResult);
+        const profileData = await batchFetchProfilesForRefresh(sentUserIds, matchesResult);
 
         const sentProfiles = Array.from(latestSentByUser.entries())
           .map(([userId, sentMeta]) => {
@@ -290,15 +368,16 @@ export default function LikesScreen() {
           })
           .filter(Boolean) as LikeProfile[];
 
-        setLikesSentData(sentProfiles);
+        if (mounted) setLikesSentData(sentProfiles);
       } catch (error) {
         console.error('Error refreshing likes sent data:', error);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     fetchLatestSentLikes();
+    return () => { mounted = false; };
   }, [selectedTab]);
 
   return (
@@ -418,7 +497,28 @@ export default function LikesScreen() {
                             contentFit="cover"
                             transition={500}
                           />
-                          {like.compatibility !== undefined && (
+                          {!canSeeWhoLikedMe && (
+                            <View style={{
+                              ...StyleSheet.absoluteFillObject,
+                              backgroundColor: 'rgba(10, 0, 30, 0.75)',
+                              borderRadius: 12,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              zIndex: 10,
+                            }}>
+                              <Text style={{ color: '#FFD700', fontSize: 18, fontWeight: 'bold' }}>⭐</Text>
+                              <Text style={{ color: '#FFFFFF', fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 12 }}>
+                                Upgrade to see who liked you
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => router.push('/(tabs)/profile')}
+                                style={{ marginTop: 10, backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 }}
+                                activeOpacity={0.8}>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>View Plans</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                          {like.compatibility !== undefined && canSeeWhoLikedMe && (
                             <View style={styles.compatibilityBadge}>
                               <Text style={styles.compatibilityText}>{like.compatibility}%</Text>
                             </View>
@@ -426,9 +526,9 @@ export default function LikesScreen() {
                           <View style={styles.overlay}>
                             <View style={styles.infoSection}>
                               <Text style={styles.nameText}>
-                                {like.name}{like.age ? `, ${like.age}` : ''}
+                                {canSeeWhoLikedMe ? like.name : 'Hidden User'}{canSeeWhoLikedMe && like.age ? `, ${like.age}` : ''}
                               </Text>
-                              {like.distance && (
+                              {like.distance && canSeeWhoLikedMe && (
                                 <View style={styles.locationRow}>
                                   <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
                                   <Text style={styles.locationText}>{like.distance}</Text>
@@ -476,7 +576,28 @@ export default function LikesScreen() {
                             contentFit="cover"
                             transition={500}
                           />
-                          {like.compatibility !== undefined && (
+                          {!canSeeWhoLikedMe && (
+                            <View style={{
+                              ...StyleSheet.absoluteFillObject,
+                              backgroundColor: 'rgba(10, 0, 30, 0.75)',
+                              borderRadius: 12,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              zIndex: 10,
+                            }}>
+                              <Text style={{ color: '#FFD700', fontSize: 18, fontWeight: 'bold' }}>⭐</Text>
+                              <Text style={{ color: '#FFFFFF', fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 12 }}>
+                                Upgrade to see who liked you
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => router.push('/(tabs)/profile')}
+                                style={{ marginTop: 10, backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 }}
+                                activeOpacity={0.8}>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>View Plans</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                          {like.compatibility !== undefined && canSeeWhoLikedMe && (
                             <View style={styles.compatibilityBadge}>
                               <Text style={styles.compatibilityText}>{like.compatibility}%</Text>
                             </View>
@@ -488,9 +609,9 @@ export default function LikesScreen() {
                             </View>
                             <View style={styles.infoSection}>
                               <Text style={styles.nameText}>
-                                {like.name}{like.age ? `, ${like.age}` : ''}
+                                {canSeeWhoLikedMe ? like.name : 'Hidden User'}{canSeeWhoLikedMe && like.age ? `, ${like.age}` : ''}
                               </Text>
-                              {like.distance && (
+                              {like.distance && canSeeWhoLikedMe && (
                                 <View style={styles.locationRow}>
                                   <MaterialIcons name="location-on" size={14} color="#FFFFFF" />
                                   <Text style={styles.locationText}>{like.distance}</Text>

@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from '@/lib/network';
 import { supabase } from '@/lib/supabase';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,7 +8,6 @@ import { useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Linking,
   Modal,
@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -33,6 +34,7 @@ export default function FiltersScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAuthAlert();
 
   // Age range state
   const [minAge, setMinAge] = useState(18);
@@ -81,7 +83,8 @@ export default function FiltersScreen() {
   const handleNewMatchToggle = async (value: boolean) => {
     setNewMatchNotifications(value);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) return;
 
       const { error } = await supabase
@@ -167,7 +170,8 @@ export default function FiltersScreen() {
   // Silent save for auto-save on slider release
   const savePreferencesSilently = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) return;
 
       // Validate preferences
@@ -382,7 +386,8 @@ export default function FiltersScreen() {
   const loadPreferences = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) {
         setLoading(false);
         return;
@@ -481,16 +486,17 @@ export default function FiltersScreen() {
   const savePreferences = async () => {
     try {
       setSaving(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) {
-        Alert.alert('Error', 'User not authenticated');
+        showAlert('Error', 'User not authenticated');
         setSaving(false);
         return;
       }
 
       // Validate preferences
       if (minAge >= maxAge) {
-        Alert.alert('Error', 'Minimum age must be less than maximum age');
+        showAlert('Error', 'Minimum age must be less than maximum age');
         setSaving(false);
         return;
       }
@@ -524,37 +530,37 @@ export default function FiltersScreen() {
           // Store locally so user's changes feel saved and can be synced later
           try {
             await AsyncStorage.setItem('unsaved_discovery_preferences', JSON.stringify(preferencesData));
-            Alert.alert(
+            showAlert(
               'Saved locally',
               "The 'user_preferences' table does not exist yet. Your preferences were saved locally and will be applied after the database migration. Please run 'supabase/migrations/014_create_user_preferences_table.sql'.",
               [{ text: 'OK', onPress: () => router.back() }]
             );
           } catch (e) {
             console.error('Failed to persist preferences locally:', e);
-            Alert.alert(
+            showAlert(
               'Error',
               "Database migration required: The 'user_preferences' table doesn't exist on the database. Please run the migration file 'supabase/migrations/014_create_user_preferences_table.sql' and try again."
             );
           }
         } else {
-          Alert.alert('Error', result.error.message || 'Failed to save preferences');
+          showAlert('Error', result.error.message || 'Failed to save preferences');
         }
         setSaving(false);
       } else {
-        Alert.alert('Success', 'All preferences saved successfully!');
+        showAlert('Success', 'All preferences saved successfully!');
         router.back();
       }
     } catch (error) {
       console.error('Error saving preferences:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to save preferences';
-      Alert.alert('Error', errorMessage);
+      showAlert('Error', errorMessage);
     } finally {
       setSaving(false);
     }
   };
 
   const resetToDefaults = async () => {
-    Alert.alert(
+    showAlert(
       'Reset Preferences',
       'Are you sure you want to reset all preferences to default values?',
       [
@@ -579,7 +585,8 @@ export default function FiltersScreen() {
               }, 100);
 
               // Save defaults to database
-              const { data: { user } } = await supabase.auth.getUser();
+              const userResult = await supabase.auth.getUser();
+              const user = userResult?.data?.user;
               if (user) {
                 // Reset all discovery fields in user_preferences
                 const preferencesData = {
@@ -601,11 +608,11 @@ export default function FiltersScreen() {
                     ignoreDuplicates: false
                   });
 
-                Alert.alert('Success', 'All preferences have been reset to default values.');
+                showAlert('Success', 'All preferences have been reset to default values.');
               }
             } catch (error) {
               console.error('Error resetting preferences:', error);
-              Alert.alert('Error', 'Failed to reset preferences. Please try again.');
+              showAlert('Error', 'Failed to reset preferences. Please try again.');
             }
           },
         },
@@ -645,8 +652,10 @@ export default function FiltersScreen() {
     try {
       setSuggestionsLoading(true);
       // Use OpenStreetMap Nominatim public search for suggestions (no API key required)
-      const resp = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6`
+      const resp = await fetchWithTimeout(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6`,
+        undefined,
+        10000
       );
       const json = await resp.json();
       const items = (json || []).map((it: any) => ({ id: it.place_id?.toString() || it.osm_id?.toString() || it.lat + ',' + it.lon, label: it.display_name }));
@@ -665,7 +674,7 @@ export default function FiltersScreen() {
       // Request location permissions
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Permission required',
           'Location permission is required to use your current location',
           [
@@ -700,11 +709,15 @@ export default function FiltersScreen() {
       // Fallback to Nominatim reverse if no readable label
       if (!label) {
         try {
-          const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`, {
-            headers: {
-              'User-Agent': 'AstroDate-App/1.0',
+          const resp = await fetchWithTimeout(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            {
+              headers: {
+                'User-Agent': 'AstroDate-App/1.0',
+              },
             },
-          });
+            10000
+          );
           const json = await resp.json();
           if (json && json.display_name) {
             label = json.display_name;
@@ -728,7 +741,7 @@ export default function FiltersScreen() {
     } catch (e: any) {
       console.error('Error using current location', e);
       const msg = e?.message || 'Failed to determine current location';
-      Alert.alert('Error', msg);
+      showAlert('Error', msg);
     } finally {
       setIsGettingLocation(false);
     }
@@ -737,9 +750,10 @@ export default function FiltersScreen() {
   const saveLocationDirect = async (label: string) => {
     try {
       setSavingDialog(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) {
-        Alert.alert('Error', 'User not authenticated');
+        showAlert('Error', 'User not authenticated');
         return;
       }
 
@@ -758,10 +772,10 @@ export default function FiltersScreen() {
 
       setLocation(label);
       setExpandedSection(null);
-      Alert.alert('Saved', 'Location set to your current location');
+      showAlert('Saved', 'Location set to your current location');
     } catch (err: any) {
       console.error('Error saving location:', err);
-      Alert.alert('Error', err?.message || 'Failed to save location');
+      showAlert('Error', err?.message || 'Failed to save location');
     } finally {
       setSavingDialog(false);
     }
@@ -771,9 +785,10 @@ export default function FiltersScreen() {
   const saveDialogChanges = async () => {
     try {
       setSavingDialog(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) {
-        Alert.alert('Error', 'User not authenticated');
+        showAlert('Error', 'User not authenticated');
         setSavingDialog(false);
         return;
       }
@@ -781,7 +796,7 @@ export default function FiltersScreen() {
       // Validate sexual orientation selection
       if (activeDialog === 'sexual_orientation') {
         if (!tempSexualOrientation || tempSexualOrientation.trim() === '') {
-          Alert.alert('Error', 'Please select a sexual orientation');
+          showAlert('Error', 'Please select a sexual orientation');
           setSavingDialog(false);
           return;
         }
@@ -843,10 +858,10 @@ export default function FiltersScreen() {
       }
 
       setActiveDialog(null);
-      Alert.alert('Saved', 'Changes saved successfully');
+      showAlert('Saved', 'Changes saved successfully');
     } catch (err: any) {
       console.error('Error saving dialog changes:', err);
-      Alert.alert('Error', err?.message || 'Failed to save changes');
+      showAlert('Error', err?.message || 'Failed to save changes');
     } finally {
       setSavingDialog(false);
     }
@@ -856,9 +871,10 @@ export default function FiltersScreen() {
   const saveExpandedSection = async (section: 'location' | 'gender' | 'sexual_orientation' | 'age' | 'distance') => {
     try {
       setSavingDialog(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const userResult = await supabase.auth.getUser();
+      const user = userResult?.data?.user;
       if (!user) {
-        Alert.alert('Error', 'User not authenticated');
+        showAlert('Error', 'User not authenticated');
         return;
       }
 
@@ -899,10 +915,10 @@ export default function FiltersScreen() {
       }
 
       setExpandedSection(null);
-      Alert.alert('Saved', 'Changes saved successfully');
+      showAlert('Saved', 'Changes saved successfully');
     } catch (err: any) {
       console.error('Error saving expanded section:', err);
-      Alert.alert('Error', err?.message || 'Failed to save changes');
+      showAlert('Error', err?.message || 'Failed to save changes');
     } finally {
       setSavingDialog(false);
     }

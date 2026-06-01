@@ -14,6 +14,7 @@
  */
 
 
+import { fetchWithTimeout } from './network';
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase';
 
 // Edge Function URL — derived from the single source-of-truth SUPABASE_URL
@@ -100,19 +101,23 @@ export const detectFaceInImage = async (
     const base64Image = await imageUriToBase64(imageUri);
 
     // Call Edge Function (which uses Gemini API internally)
-    const response = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY,
+    const response = await fetchWithTimeout(
+      EDGE_FUNCTION_URL,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: 'detect',
+          base64Image,
+          provider: 'gemini', // Indicate we're using Gemini API
+        }),
       },
-      body: JSON.stringify({
-        action: 'detect',
-        base64Image,
-        provider: 'gemini', // Indicate we're using Gemini API
-      }),
-    });
+      20000
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -177,20 +182,24 @@ export const verifySamePerson = async (
     ]);
 
     // Call Edge Function (which uses Gemini API for image comparison)
-    const response = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY,
+    const response = await fetchWithTimeout(
+      EDGE_FUNCTION_URL,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: 'verify',
+          base64Image1,
+          base64Image2,
+          provider: 'gemini', // Indicate we're using Gemini API
+        }),
       },
-      body: JSON.stringify({
-        action: 'verify',
-        base64Image1,
-        base64Image2,
-        provider: 'gemini', // Indicate we're using Gemini API
-      }),
-    });
+      20000
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -256,19 +265,23 @@ export const verifyAllPhotos = async (
     );
 
     // Call Edge Function (which uses Gemini API for batch verification)
-    const response = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'apikey': SUPABASE_ANON_KEY,
+    const response = await fetchWithTimeout(
+      EDGE_FUNCTION_URL,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          action: 'verifyAll',
+          base64Images,
+          provider: 'gemini', // Indicate we're using Gemini API
+        }),
       },
-      body: JSON.stringify({
-        action: 'verifyAll',
-        base64Images,
-        provider: 'gemini', // Indicate we're using Gemini API
-      }),
-    });
+      20000
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

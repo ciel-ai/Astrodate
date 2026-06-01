@@ -166,7 +166,7 @@ export const getReportedUserIds = async (): Promise<{ success: boolean; data?: s
       };
     }
 
-    const reportedUserIds = data?.map((report) => report.reported_user_id) || [];
+    const reportedUserIds = (data?.map((report) => report.reported_user_id) || []).filter((id): id is string => id !== null);
 
     return {
       success: true,
@@ -238,4 +238,3 @@ export const isUserReportedInChannel = async (
     return { success: false, error: errorMessage };
   }
 };
-

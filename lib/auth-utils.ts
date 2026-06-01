@@ -20,7 +20,7 @@ export const checkPhoneNumberExists = async (phone: string): Promise<boolean> =>
     const { data, error } = await supabase
       .from('user_profiles')
       .select('user_id')
-      .eq('phone', phone)
+      .eq('phone_number', phone)
       .maybeSingle();
 
     if (error) {
@@ -68,12 +68,7 @@ export const generateSignupOTP = async (phone: string) => {
       };
     }
 
-    const user = data.user as any;
-    console.log('User data:', {
-      id: user.id,
-      created_at: user.created_at,
-      phone: user.phone,
-    });
+    console.log('OTP generation response received');
 
     return {
       success: true,

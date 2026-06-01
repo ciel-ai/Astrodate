@@ -5,6 +5,7 @@
  * for astrology-related conversations via Supabase Edge Functions
  */
 
+import { fetchWithTimeout, invokeSupabaseFunctionWithTimeout } from './network';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from './supabase';
 
 /**
@@ -38,6 +39,20 @@ export interface ChatResponse {
   error?: string;
 }
 
+type SerializedChatMessage = {
+  role: ChatMessage['role'];
+  content: string;
+  timestamp?: string;
+};
+
+type GeminiFunctionResponse = ChatResponse;
+
+type FunctionErrorLike = {
+  name?: string;
+  message?: string;
+  context?: { status?: number };
+};
+
 /**
  * Sends a message to Gemini API via Supabase Edge Function and gets a response
  */
@@ -56,19 +71,22 @@ export const sendMessageToGemini = async (
 
     // Call the Supabase Edge Function
     // Try using supabase.functions.invoke() first, with fallback to direct fetch
-    let data: any = null;
-    let error: any = null;
+    let data: GeminiFunctionResponse | null = null;
+    let error: FunctionErrorLike | Error | null = null;
 
     try {
       // First try using supabase.functions.invoke() (automatically includes auth token)
-      const result = await supabase.functions.invoke('gemini-chatbot', {
-        body: {
-          message: userMessage,
-          conversationHistory: serializedHistory,
-        },
-      });
+      const result = await invokeSupabaseFunctionWithTimeout(
+        () => supabase.functions.invoke('gemini-chatbot', {
+          body: {
+            message: userMessage,
+            conversationHistory: serializedHistory satisfies SerializedChatMessage[],
+          },
+        }),
+        20000
+      );
 
-      data = result.data;
+      data = asGeminiFunctionResponse(result.data);
       error = result.error;
     } catch (invokeError) {
       // If invoke fails, try direct fetch as fallback
@@ -76,10 +94,11 @@ export const sendMessageToGemini = async (
 
       try {
         // Get the session token for authentication
-        const { data: { session } } = await supabase.auth.getSession();
+        const sessionResult = await supabase.auth.getSession();
+        const session = sessionResult?.data?.session;
         const authToken = session?.access_token || SUPABASE_ANON_KEY;
 
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${SUPABASE_URL}/functions/v1/gemini-chatbot`,
           {
             method: 'POST',
@@ -90,9 +109,10 @@ export const sendMessageToGemini = async (
             },
             body: JSON.stringify({
               message: userMessage,
-              conversationHistory: serializedHistory,
+            conversationHistory: serializedHistory satisfies SerializedChatMessage[],
             }),
-          }
+          },
+          20000
         );
 
         if (!response.ok) {
@@ -103,10 +123,10 @@ export const sendMessageToGemini = async (
             context: { status: response.status },
           };
         } else {
-          data = await response.json();
+          data = asGeminiFunctionResponse(await response.json());
         }
       } catch (fetchError) {
-        error = fetchError;
+        error = fetchError as Error;
       }
     }
 
@@ -118,15 +138,15 @@ export const sendMessageToGemini = async (
       let errorMessage = 'Failed to call chatbot service';
 
       // Check if error has context with status
-      if (error.context?.status === 401) {
+      const status = getFunctionErrorStatus(error);
+      if (status === 401) {
         errorMessage = 'Authentication failed. Please make sure the Edge Function is deployed and the apikey is configured correctly.';
-      } else if (error.context?.status === 404) {
+      } else if (status === 404) {
         errorMessage = 'Edge Function not found. Please deploy the "gemini-chatbot" function in your Supabase project.';
       } else if (error.message) {
         errorMessage = error.message;
       } else if (error.name === 'FunctionsHttpError') {
         // Try to get error from response body if available
-        const status = error.context?.status;
         if (status === 401) {
           errorMessage = 'Unauthorized. The Edge Function requires proper authentication. Make sure it is deployed and configured.';
         } else if (status === 500) {
@@ -143,7 +163,7 @@ export const sendMessageToGemini = async (
     }
 
     // The Edge Function returns { success: boolean, message?: string, error?: string }
-    if (data && data.success && data.message) {
+    if (data?.success && data.message) {
       return {
         success: true,
         message: data.message,
@@ -173,3 +193,20 @@ export const sendMessageToGemini = async (
 export const getWelcomeMessage = (): string => {
   return "Hello! I'm your astrology guide for AstroDate. 🌟\n\nI can help you with:\n• Understanding astrological compatibility\n• Relationship insights based on zodiac signs\n• Dating advice from an astrological perspective\n• Your personal astrological profile\n• General astrology questions\n\nWhat would you like to know?";
 };
+
+function asGeminiFunctionResponse(value: unknown): GeminiFunctionResponse {
+  if (typeof value !== 'object' || value === null) {
+    return { success: false, error: 'Invalid chatbot response' };
+  }
+
+  const response = value as Partial<Record<keyof GeminiFunctionResponse, unknown>>;
+  return {
+    success: response.success === true,
+    message: typeof response.message === 'string' ? response.message : undefined,
+    error: typeof response.error === 'string' ? response.error : undefined,
+  };
+}
+
+function getFunctionErrorStatus(error: FunctionErrorLike | Error): number | undefined {
+  return 'context' in error ? error.context?.status : undefined;
+}

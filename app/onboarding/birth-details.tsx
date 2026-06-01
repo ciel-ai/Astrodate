@@ -5,7 +5,6 @@ import { router, useNavigation } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function BirthDetailsScreen() {
@@ -40,13 +40,15 @@ export default function BirthDetailsScreen() {
   const geocodeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const geocodeAbortControllerRef = useRef<AbortController | null>(null);
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+  const isMountedRef = useRef(true);
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAuthAlert();
 
   useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Cleanup: Cancel pending geocoding requests on unmount
   useEffect(() => {
@@ -59,6 +61,12 @@ export default function BirthDetailsScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
 
   // Format date for display
   const formatDate = (date: Date | null): string => {
@@ -420,12 +428,12 @@ export default function BirthDetailsScreen() {
         });
       } catch (error) {
         console.error('Astro details error:', error);
-        Alert.alert(
+        showAlert(
           'Astro Profile',
           'We could not generate your astro details. Please check your birth information and try again.'
         );
       } finally {
-        setIsSubmittingProfile(false);
+        if (isMountedRef.current) setIsSubmittingProfile(false);
       }
     }
   };
@@ -438,7 +446,7 @@ export default function BirthDetailsScreen() {
           keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 20 : 24}
           style={styles.keyboardView}>
           <ScrollView
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: Platform.OS === 'ios' ? 500 : 300 }]}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -558,8 +566,10 @@ export default function BirthDetailsScreen() {
                 )}
               </View>
             </View>
+            </ScrollView>
 
             {/* Generate Button */}
+             <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.generateButton, isSubmittingProfile && styles.generateButtonDisabled]}
               onPress={handleGenerateProfile}
@@ -576,7 +586,7 @@ export default function BirthDetailsScreen() {
                 </>
               )}
             </TouchableOpacity>
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
 
@@ -759,9 +769,6 @@ export default function BirthDetailsScreen() {
                 <Text style={styles.ageText}>
                   You are <Text style={styles.ageNumber}>{calculateAge(dateOfBirth)}</Text> years old
                 </Text>
-                <Text style={styles.ageSubtext}>
-                  Based on your date of birth: {formatDate(dateOfBirth)}
-                </Text>
               </View>
             )}
             <TouchableOpacity
@@ -803,7 +810,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 40,
+    paddingBottom: 16,
+  },
+  buttonContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+    paddingTop: 12,
+    backgroundColor: COLORS.background,
   },
   formContainer: {
     gap: 24,

@@ -1,8 +1,9 @@
+import { useAuthAlert } from '@/lib/auth-alert-context';
 import { supabase } from '@/lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const COLORS = {
   background: '#FFFFFF',
@@ -19,12 +20,20 @@ const COLORS = {
 export default function OTPVerifyScreen() {
   const router = useRouter();
   const navigation: any = useNavigation();
+  const { showAlert } = useAuthAlert();
   const params = useLocalSearchParams<{ phone: string; isSignup?: string }>();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(60);
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const isVerifyingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const phoneNumber = params.phone || '';
   const isSignup = params.isSignup === 'true';
@@ -35,13 +44,16 @@ export default function OTPVerifyScreen() {
     return digits ? `+${digits}` : '';
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
-    setResendCooldown(60); // Start 60 second cooldown
+  }, [navigation]);
+
+  useEffect(() => {
     // Focus first input after a short delay
-    setTimeout(() => {
+    const focusTimeout = setTimeout(() => {
       inputRefs.current[0]?.focus();
     }, 300);
+    return () => clearTimeout(focusTimeout);
   }, [navigation]);
 
   // Countdown timer for resend
@@ -58,8 +70,9 @@ export default function OTPVerifyScreen() {
       const otpArray = value.split('');
       setOtp(otpArray);
       inputRefs.current[5]?.focus();
-      // Automatically trigger verification for a better UX
-      handleVerify(value);
+      // Small delay to avoid race condition where verifyOtp fires before
+      // Supabase has fully registered the token server-side
+      setTimeout(() => handleVerify(value), 500);
       return;
     }
 
@@ -93,15 +106,16 @@ export default function OTPVerifyScreen() {
 
     const code = otpCode || otp.join('');
     if (code.length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter all 6 digits');
+      showAlert('Invalid OTP', 'Please enter all 6 digits');
       return;
     }
 
     const normalizedPhone = normalizePhoneForAuth(phoneNumber);
     if (!normalizedPhone) {
-      Alert.alert('Verification Failed', 'Invalid phone number. Please go back and try again.');
+      showAlert('Verification Failed', 'Invalid phone number. Please go back and try again.');
       return;
     }
+
 
     isVerifyingRef.current = true;
     setLoading(true);
@@ -127,10 +141,12 @@ export default function OTPVerifyScreen() {
           errorMessage = 'Too many attempts. Please wait a moment and try again.';
         }
 
-        Alert.alert('Verification Failed', errorMessage);
+        showAlert('Verification Failed', errorMessage);
         // Clear OTP on error
-        setOtp(['', '', '', '', '', '']);
-        inputRefs.current[0]?.focus();
+        if (isMountedRef.current) {
+          setOtp(['', '', '', '', '', '']);
+          inputRefs.current[0]?.focus();
+        }
         return;
       }
 
@@ -152,12 +168,12 @@ export default function OTPVerifyScreen() {
             .from('user_profiles')
             .select('id')
             .eq('user_id', user.id)
-            .single();
+            .maybeSingle();
 
           if (existingProfile) {
-            setLoading(false);
+            if (isMountedRef.current) setLoading(false);
             await supabase.auth.signOut();
-            Alert.alert(
+            showAlert(
               'Account Already Exists',
               'An account with this phone number already exists. Please use the login page instead.',
               [
@@ -181,19 +197,25 @@ export default function OTPVerifyScreen() {
           params: { phone: phoneNumber }
         });
       } else {
-        Alert.alert('Verification Failed', 'Session not created. Please try again.');
-        setOtp(['', '', '', '', '', '']);
-        inputRefs.current[0]?.focus();
+        showAlert('Verification Failed', 'Session not created. Please try again.');
+        if (isMountedRef.current) {
+          setOtp(['', '', '', '', '', '']);
+          inputRefs.current[0]?.focus();
+        }
       }
     } catch (err: any) {
       // Log error for debugging (not shown to user)
       console.error('OTP verification exception:', err);
-      Alert.alert('Verification Failed', 'An error occurred. Please try again.');
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
+      showAlert('Verification Failed', 'An error occurred. Please try again.');
+      if (isMountedRef.current) {
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+      }
     } finally {
-      isVerifyingRef.current = false;
-      setLoading(false);
+      if (isMountedRef.current) {
+        isVerifyingRef.current = false;
+        setLoading(false);
+      }
     }
   };
 
@@ -202,7 +224,7 @@ export default function OTPVerifyScreen() {
 
     const normalizedPhone = normalizePhoneForAuth(phoneNumber);
     if (!normalizedPhone) {
-      Alert.alert('Resend Failed', 'Invalid phone number. Please go back and try again.');
+      showAlert('Resend Failed', 'Invalid phone number. Please go back and try again.');
       return;
     }
 
@@ -215,7 +237,7 @@ export default function OTPVerifyScreen() {
 
       if (error) {
         console.error('OTP resend error:', error);
-        Alert.alert('Resend Failed', error.message || 'Could not resend OTP. Please try again.');
+        showAlert('Resend Failed', error.message || 'Could not resend OTP. Please try again.');
         setLoading(false);
         return;
       }
@@ -223,12 +245,14 @@ export default function OTPVerifyScreen() {
       setResendCooldown(60);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
-      Alert.alert('OTP Resent', 'A new OTP has been sent to your phone number');
+      showAlert('OTP Resent', 'A new OTP has been sent to your phone number');
     } catch (err: any) {
       console.error('OTP resend exception:', err);
-      Alert.alert('Resend Failed', err?.message || 'Could not resend OTP. Please try again.');
+      showAlert('Resend Failed', err?.message || 'Could not resend OTP. Please try again.');
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -249,7 +273,6 @@ export default function OTPVerifyScreen() {
             <Text style={styles.subtitle}>Enter the 6-digit code sent to</Text>
             <Text style={styles.phoneNumber}>{phoneNumber}</Text>
 
-            {/* OTP Inputs */}
             <View style={styles.otpContainer}>
               {otp.map((digit, index) => (
                 <TextInput
@@ -288,9 +311,9 @@ export default function OTPVerifyScreen() {
               <Text style={styles.resendText}>Didn't receive the code?</Text>
               <TouchableOpacity
                 onPress={handleResendOTP}
-                disabled={loading}
-                style={[styles.resendButton, (resendCooldown > 0 || loading) && styles.resendButtonDisabled]}
-              >
+                disabled={loading || resendCooldown > 0}
+                activeOpacity={0.8}
+              > 
                 <Text style={styles.resendButtonText}>{loading ? 'Sending...' : 'Resend OTP'}</Text>
               </TouchableOpacity>
               {resendCooldown > 0 && <Text style={styles.resendCooldownText}>Available in {resendCooldown}s</Text>}
@@ -432,5 +455,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: COLORS.textSecondary,
     fontSize: 13,
+  },
+  devBanner: {
+    backgroundColor: '#FFF3CD',
+    borderColor: '#FFCA28',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    width: '100%',
+    alignItems: 'center',
+  },
+  devBannerText: {
+    color: '#7B5800',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
