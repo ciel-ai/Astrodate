@@ -65,6 +65,8 @@ import { SparklingHeart } from './SparklingHeart';
 import SwipeTutorialOverlay from './SwipeTutorialOverlay';
 import { CosmicMatchCard } from './CosmicMatchCard';
 import { ProfileCard } from './ProfileCard';
+import { CardActionBar } from './CardActionBar';
+import { MatchModal } from './MatchModal';
 import {
   getDynamicBio,
   formatHobby,
@@ -1650,42 +1652,28 @@ export default function DiscoverScreen() {
 
       {/* Action buttons Overlay */}
       {profiles.length > 0 && currentProfileIndex < profiles.length && !isFlipped && (
-        <Animated.View style={[styles.actionIconsFixed, { bottom: dynamicActionButtonsBottom }]}>
-          <View style={styles.actionIconsContainer}>
-            <TouchableOpacity activeOpacity={0.7} style={styles.actionButtonSmallWrapper} onPress={handleDislike} disabled={isTransitioning}>
-              <Animated.View style={[styles.actionIconGlassy, dislikeButtonScale, dislikeButtonColorStyle]}>
-                <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-                <AnimatedFontAwesome name="close" size={28} style={dislikeIconStyle} />
-              </Animated.View>
-            </TouchableOpacity>
-
-            <TouchableOpacity activeOpacity={0.7} style={styles.actionButtonSmallWrapper} onPress={handleSuperLike} disabled={isTransitioning}>
-              <Animated.View style={[styles.actionIconGlassy, superLikeButtonScale, superLikeButtonColorStyle]}>
-                <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-                <AnimatedIonicons name="star" size={28} style={superLikeIconStyle} />
-              </Animated.View>
-              {superLikesRemaining !== null && superLikesRemaining <= 2 && superLikesRemaining < 999 && (
-                <View style={styles.superLikeCountBadge}>
-                  <Text style={styles.superLikeCountBadgeText}>{superLikesRemaining}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity activeOpacity={0.7} style={styles.actionButtonSmallWrapper} onPress={handleLike} disabled={isTransitioning}>
-              <Animated.View style={[styles.actionIconGlassy, likeButtonScale, likeButtonColorStyle]}>
-                <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-                <AnimatedMaterialIcons name="favorite" size={28} style={likeIconStyle} />
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+        <CardActionBar
+          onLike={handleLike}
+          onDislike={handleDislike}
+          onSuperLike={handleSuperLike}
+          isTransitioning={isTransitioning}
+          superLikesRemaining={superLikesRemaining}
+          bottom={dynamicActionButtonsBottom}
+          dislikeButtonScale={dislikeButtonScale}
+          dislikeButtonColorStyle={dislikeButtonColorStyle}
+          dislikeIconStyle={dislikeIconStyle}
+          superLikeButtonScale={superLikeButtonScale}
+          superLikeButtonColorStyle={superLikeButtonColorStyle}
+          superLikeIconStyle={superLikeIconStyle}
+          likeButtonScale={likeButtonScale}
+          likeButtonColorStyle={likeButtonColorStyle}
+          likeIconStyle={likeIconStyle}
+        />
       )}
 
       {/* Match Modal */}
-      <Modal
+      <MatchModal
         visible={showMatchModal}
-        transparent={true}
-        animationType="fade"
         onRequestClose={() => {
           setShowMatchModal(false);
           setMatchedProfile(null);
@@ -1694,142 +1682,12 @@ export default function DiscoverScreen() {
           setMatchAstroScore(null);
           setMatchId(null);
         }}
-      >
-        {matchedProfile && (
-          <LinearGradient
-            colors={['#1a0d2e', '#2d1b4e', '#4a2c5a']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.matchOverlay}
-          >
-            {/* Starfield background to match Likes screen */}
-            <View style={{ ...StyleSheet.absoluteFillObject, overflow: 'hidden' }}>
-              {stars.map((star) => (
-                <View
-                  key={`match-star-${star.id}`}
-                  style={{
-                    position: 'absolute',
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: star.size / 2,
-                    left: `${star.x}%`,
-                    top: `${star.y}%`,
-                    width: star.size,
-                    height: star.size,
-                    opacity: star.opacity,
-                  }}
-                />
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={styles.matchBackButton}
-              onPress={() => {
-                setShowMatchModal(false);
-                setMatchedProfile(null);
-                setMatchedUserId(null);
-                setMatchIcebreaker(null);
-                setMatchAstroScore(null);
-                setMatchId(null);
-              }}
-            >
-              <MaterialIcons name="close" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                flexGrow: 1,
-                justifyContent: 'center',
-                paddingTop: 80, // Space for the close button
-                paddingBottom: 40,
-                paddingHorizontal: 24,
-              }}
-              style={{ width: '100%' }}
-            >
-              {/* Match Cards - Redesigned as Planetary Spheres */}
-              <View style={styles.matchCardsContainer}>
-                {/* Current User Card (Left) */}
-                <View style={[styles.matchProfileCard, styles.matchCardLeft, styles.planetarySphere]}>
-                  <Image
-                    source={typeof currentUserPhoto === 'string' ? { uri: currentUserPhoto } : currentUserPhoto}
-                    style={styles.matchProfileImage}
-                    contentFit="cover"
-                  />
-                </View>
-
-                {/* Matched User Card (Right) */}
-                <View style={[styles.matchProfileCard, styles.matchCardRight, styles.planetarySphere]}>
-                  <Image
-                    source={typeof matchedProfile?.image === 'string' ? { uri: matchedProfile?.image } : matchedProfile?.image}
-                    style={styles.matchProfileImage}
-                    contentFit="cover"
-                  />
-                </View>
-
-                {/* Pink Heart Icon at bottom center of overlapping images */}
-                <View style={styles.matchHeartIcon}>
-                  <MaterialIcons name="favorite" size={44} color="#EC4899" />
-                </View>
-              </View>
-
-              {/* Match Text */}
-              <View style={styles.matchTextContainer}>
-                <Text style={[styles.matchTitle, { color: '#FFFFFF' }]}>It's a Match!</Text>
-                <Text style={[styles.matchSubtitle, { color: 'rgba(255, 255, 255, 0.8)' }]}>
-                  You and {matchedProfile.name} liked each other. Start a conversation!
-                </Text>
-              </View>
-
-              {/* AstroScore Ring */}
-              {matchAstroScore !== null && (
-                <View style={{ alignItems: 'center', marginTop: 12, marginBottom: 4 }}>
-                  <View style={{
-                    width: 72, height: 72, borderRadius: 36,
-                    borderWidth: 4,
-                    borderColor: matchAstroScore >= 75 ? '#f59e0b' : matchAstroScore >= 50 ? '#8b5cf6' : '#6b7280',
-                    justifyContent: 'center', alignItems: 'center',
-                    backgroundColor: 'rgba(255,255,255,0.08)',
-                  }}>
-                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 20 }}>
-                      {matchAstroScore}
-                    </Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 9, marginTop: -2 }}>
-                      AstroScore
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Icebreaker Suggestion Chip */}
-              {matchIcebreaker && (
-                <View style={{
-                  marginHorizontal: 20, marginTop: 12, marginBottom: 20,
-                  backgroundColor: 'rgba(255,255,255,0.12)',
-                  borderRadius: 14, padding: 12,
-                  alignSelf: 'stretch',
-                }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: '600', marginBottom: 4, letterSpacing: 0.5 }}>
-                    ✨ SUGGESTED OPENER
-                  </Text>
-                  <Text style={{ color: '#fff', fontSize: 13, lineHeight: 18 }}>
-                    {matchIcebreaker}
-                  </Text>
-                </View>
-              )}
-
-              {/* Send Message Button */}
-              <Pressable
-                style={[styles.matchSendButton, { alignSelf: 'stretch', marginHorizontal: 20 }]}
-                onPress={handleSendMessageFromMatchModal}
-                android_ripple={{ color: 'rgba(255, 255, 255, 0.2)', borderless: false }}
-              >
-                <MaterialIcons name="chat" size={24} color="#FFFFFF" />
-                <Text style={styles.matchSendButtonText}>Send Message</Text>
-              </Pressable>
-            </ScrollView>
-          </LinearGradient>
-        )}
-      </Modal>
+        matchedProfile={matchedProfile}
+        currentUserPhoto={currentUserPhoto}
+        matchAstroScore={matchAstroScore}
+        matchIcebreaker={matchIcebreaker}
+        onSendMessage={handleSendMessageFromMatchModal}
+      />
 
       {/* Compatibility Detail Modal */}
       <Modal
