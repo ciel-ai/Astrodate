@@ -80,13 +80,14 @@ import {
   type Profile,
 } from '../utils/profileHelpers';
 
-const { width: STATIC_WIDTH, height: STATIC_HEIGHT } = Dimensions.get('window');
-// Tab bar: 60 height + marginBottom (28 iOS / 20 Android)
-const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 88 : 80;
-// Responsively adjust card height based on screen size
-const CARD_HEIGHT = Math.round(STATIC_HEIGHT * (STATIC_HEIGHT < 750 ? 0.72 : 0.75));
-// Give the action buttons a bit more breathing room on small screens
-const ACTION_BUTTONS_BOTTOM = TAB_BAR_OFFSET + (STATIC_HEIGHT < 750 ? 12 : 20);
+import {
+  STATIC_WIDTH,
+  STATIC_HEIGHT,
+  TAB_BAR_OFFSET,
+  CARD_HEIGHT,
+  ACTION_BUTTONS_BOTTOM,
+  SWIPE_THRESHOLD,
+} from '../utils/feedTypes';
 
 const AnimatedBlurView = createAnimatedComponent(BlurView);
 const AnimatedMaterialIcons = createAnimatedComponent(MaterialIcons);
@@ -94,7 +95,7 @@ const AnimatedFontAwesome = createAnimatedComponent(FontAwesome);
 const AnimatedIonicons = createAnimatedComponent(Ionicons);
 const AnimatedPressable = createAnimatedComponent(Pressable);
 
-const SWIPE_THRESHOLD = 90;
+// SWIPE_THRESHOLD imported from ../utils/feedTypes
 
 // Profile type is now imported from ../utils/profileHelpers
 

@@ -1,50 +1,7 @@
 import { Platform } from 'react-native';
 
-// Re-exported Profile type (sourced from FeedScreen until Step 8 moves types)
-// Keep in sync with the Profile interface in FeedScreen.tsx
-export type Profile = {
-  id: string | number;
-  name: string;
-  age?: number;
-  location?: string;
-  image: any;
-  photos?: { uri: string }[];
-  compatibility?: number;
-  indian_score?: number;
-  western_score?: number;
-  personality_score?: number;
-  indian_recommendation?: string | null;
-  western_report?: string | null;
-  final_score?: number;
-  about_me?: string;
-  interests?: string[];
-  western_sign?: string;
-  indian_sign?: string;
-  looking_for?: string;
-  relationship_status?: string;
-  hobbies?: string[];
-  height?: string;
-  introvert_extrovert?: string;
-  partner_preference?: string[];
-  gender?: string;
-  personality_detail?: {
-    date_type?: string | string[];
-    unusual_foods?: string;
-    conversations?: string;
-    planning_style?: string;
-    commitments?: string;
-    workspace?: string;
-    spend_time?: string;
-    energy_level?: string;
-    partner_energy?: string;
-    arguments?: string;
-    show_care?: string;
-    partner_type?: string;
-    late_reply?: string;
-    emotional_handling?: string;
-    overthink?: string;
-  };
-};
+import { Profile } from './feedTypes';
+export type { Profile };
 
 export const getLabelForValue = (key: string, value: string): string => {
   if (!value) return '';
