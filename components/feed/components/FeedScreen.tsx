@@ -59,6 +59,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFeedViewport } from '../hooks/useFeedViewport';
 import { useFeedData } from '../hooks/useFeedData';
+import { useFeedActions } from '../hooks/useFeedActions';
 import { cleanupFeedChannel, removeFeedChannelsByTopicPrefix } from '../realtime/feedRealtimeManager';
 import { CircularProgress } from './CircularProgress';
 import FeedEmptyState from './FeedEmptyState';
@@ -285,77 +286,6 @@ export default function DiscoverScreen() {
   }, [isTabBarHidden, isTabBarHiddenShared]);
 
 
-  // Removed missed-match popup logic
-
-  // Fixed heart positions for match modal
-  const matchHearts = useMemo(() => {
-    return Array.from({ length: 20 }).map((_, i) => ({
-      id: i,
-      left: (i * 37) % 100,
-      top: (i * 23 + 17) % 100,
-      size: (i % 3) * 5 + 15,
-      opacity: (i % 4) * 0.1 + 0.3,
-    }));
-  }, []);
-
-
-  const checkAndShowMatch = useCallback(async (likedUserId: string, profile: Profile) => {
-    try {
-      const result = await checkMutualLike(likedUserId);
-      if (result.isMatch) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-        setMatchedProfile(profile);
-        setMatchedUserId(String(likedUserId));
-        setMatchId(result.matchData?.id ?? null);
-
-        // Fetch synastry score and icebreaker in background — don't block modal open
-        const { data: sessionData } = await supabase.auth.getSession();
-        const currentUserId = sessionData?.session?.user?.id;
-
-        if (currentUserId) {
-          // AstroScore ring
-          getSynastryDetail(currentUserId, likedUserId).then(({ data }) => {
-            if (data) setMatchAstroScore(derivedAstroScore(data));
-          }).catch(() => { });
-        }
-
-        // Icebreaker — wait a beat so the background write has a head start
-        if (result.matchData?.id) {
-          setTimeout(async () => {
-            const text = await getIcebreakerForMatch(result.matchData.id);
-            setMatchIcebreaker(text);
-          }, 1500);
-        }
-
-        setShowMatchModal(true);
-      }
-    } catch (error) {
-      console.error('Error checking for match:', error);
-    }
-  }, []);
-
-  const handleSendMessageFromMatchModal = useCallback(async () => {
-    const chatUserId = matchedUserId || (matchedProfile?.id ? String(matchedProfile.id) : null);
-
-    setShowMatchModal(false);
-    setMatchedProfile(null);
-    setMatchedUserId(null);
-    setMatchIcebreaker(null);
-    setMatchAstroScore(null);
-    setMatchId(null);
-
-    if (!chatUserId) return;
-
-    // Ensure match row/channel exists before opening the chat screen.
-    await checkMutualLike(chatUserId);
-
-    router.push({
-      pathname: '/chat/[id]/index' as any,
-      params: { id: chatUserId },
-    });
-  }, [matchedProfile, matchedUserId, router]);
-
   const setNextCardBlurActive = useCallback(() => {
     runOnUI(() => {
       'worklet';
@@ -399,133 +329,67 @@ export default function DiscoverScreen() {
     setIsTransitioning(false);
   }, [profiles, resetNextCardBlur, rotateY]);
 
-  const handleLike = useCallback(async () => {
-    if (isFlipped || isTransitioning || profiles.length === 0 || currentProfileIndex >= profiles.length) return;
-
-    setIsTransitioning(true);
-
-    // Immediate visual and physical feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setNextCardBlurActive();
-
-    // Start animation immediately (Optimistic UI)
-    const toX = SCREEN_WIDTH + 120;
-    translateX.value = withTiming(toX, { duration: 220 }, (finished) => {
-      if (finished) {
-        runOnJS(updateProfileIndex)();
-      }
-    });
-    translateY.value = withTiming(translateY.value + 20, { duration: 220 });
-    opacity.value = withTiming(0, { duration: 200 });
-
-    const currentProfile = profiles[currentProfileIndex];
-    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
-
-    // Save like to database in background
-    if (likedUserId) {
-      try {
-        const result = await saveUserLike(likedUserId, 'like');
-        if (result.success) {
-          signalLike(likedUserId);
-          await checkAndShowMatch(likedUserId, currentProfile);
-        } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
-          console.warn(`⚠️ User ${likedUserId} no longer exists.`);
-        }
-      } catch (error) {
-        console.error('Error in handleLike backend:', error);
-      }
-    }
-  }, [isFlipped, isTransitioning, profiles, currentProfileIndex, checkAndShowMatch, updateProfileIndex, resetNextCardBlur, setNextCardBlurActive, SCREEN_WIDTH, translateX, translateY, opacity]);
-
-  const handleDislike = useCallback(async () => {
-    if (isFlipped || isTransitioning || profiles.length === 0 || currentProfileIndex >= profiles.length) return;
-
-    setIsTransitioning(true);
-
-    // Immediate visual and physical feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setNextCardBlurActive();
-
-    // Start animation immediately (Optimistic UI)
-    const toX = -(SCREEN_WIDTH + 120);
-    translateX.value = withTiming(toX, { duration: 220 }, (finished) => {
-      if (finished) {
-        runOnJS(updateProfileIndex)();
-      }
-    });
-    translateY.value = withTiming(translateY.value + 20, { duration: 220 });
-    opacity.value = withTiming(0, { duration: 200 });
-
-    const currentProfile = profiles[currentProfileIndex];
-    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
-
-    // Save dislike to database in background
-    if (likedUserId) {
-      try {
-        const result = await saveUserLike(likedUserId, 'dislike');
-        if (result.success) {
-          signalDislike(likedUserId);
-        }
-        if (!result.success && result.error !== 'THE_USER_NO_LONGER_EXISTS') {
-          console.error('Error saving dislike:', result.error);
-        }
-      } catch (error) {
-        console.error('Error saving dislike in backend:', error);
-      }
-    }
-  }, [isFlipped, isTransitioning, profiles, currentProfileIndex, updateProfileIndex, setNextCardBlurActive, SCREEN_WIDTH, translateX, translateY, opacity]);
-
-  const handleSuperLike = useCallback(async () => {
-    if (isFlipped || isTransitioning || profiles.length === 0 || currentProfileIndex >= profiles.length) return;
-
-    setIsTransitioning(true);
-
-    // Immediate visual and physical feedback
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setNextCardBlurActive();
-
-    // Start animation immediately (Optimistic UI)
-    const toY = -SCREEN_WIDTH;
-    translateY.value = withTiming(toY, { duration: 260 }, (finished) => {
-      if (finished) {
-        runOnJS(updateProfileIndex)();
-      }
-    });
-    opacity.value = withTiming(0, { duration: 200 });
-
-    const currentProfile = profiles[currentProfileIndex];
-    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
-
-    // Save super like to database in background
-    if (likedUserId) {
-      try {
-        const result = await saveUserLike(likedUserId, 'super_like');
-        if (result.success) {
-          signalSuperLike(likedUserId);
-          await checkAndShowMatch(likedUserId, currentProfile);
-          void fetchSuperLikesRemaining();
-        } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
-          console.warn(`⚠️ User ${likedUserId} no longer exists, skipping...`);
-        } else if (result.error === 'QUOTA_EXCEEDED' || result.error === 'SUPER_LIKE_QUOTA_EXCEEDED') {
-          // Show upgrade sheet instead of generic error
-          resetCardPosition();
-          setShowUpgradeSheet(true);
-          return; // do not call updateProfileIndex — keep card visible
-        } else {
-          console.error('Error saving super like:', result.error);
-        }
-      } catch (error) {
-        console.error('Error in handleSuperLike backend:', error);
-      }
-    }
-  }, [isFlipped, isTransitioning, profiles, currentProfileIndex, checkAndShowMatch, updateProfileIndex, setNextCardBlurActive, SCREEN_WIDTH, translateY, opacity, fetchSuperLikesRemaining]);
-
   const resetCardPosition = () => {
     'worklet';
     translateX.value = withSpring(0, { damping: 12, stiffness: 120 });
     translateY.value = withSpring(0, { damping: 12, stiffness: 120 });
     rotate.value = withSpring(0, { damping: 12, stiffness: 120 });
   };
+
+  const {
+    handleLike,
+    handleDislike,
+    handleSuperLike,
+    handleSendMessageFromMatchModal,
+    saveSwipeAction,
+    submitReport,
+    checkAndShowMatch,
+  } = useFeedActions({
+    profiles,
+    currentProfileIndex,
+    isFlipped,
+    isTransitioning,
+    setIsTransitioning,
+    updateProfileIndex,
+    SCREEN_WIDTH,
+    translateX,
+    translateY,
+    opacity,
+    nextCardBlur,
+    resetCardPosition,
+    fetchSuperLikesRemaining,
+    setShowUpgradeSheet,
+    router,
+    setMatchedProfile,
+    setMatchedUserId,
+    setMatchId,
+    setMatchIcebreaker,
+    setMatchAstroScore,
+    setShowMatchModal,
+    setProfiles,
+    setCurrentProfileIndex,
+    setReportedUserIds,
+    setReportingProfile,
+    setShowReportReasonModal,
+    isSubmittingReport,
+    setIsSubmittingReport,
+    reportingProfile,
+    matchedProfile,
+    matchedUserId,
+  });
+
+  // Removed missed-match popup logic
+
+  // Fixed heart positions for match modal
+  const matchHearts = useMemo(() => {
+    return Array.from({ length: 20 }).map((_, i) => ({
+      id: i,
+      left: (i * 37) % 100,
+      top: (i * 23 + 17) % 100,
+      size: (i % 3) * 5 + 15,
+      opacity: (i % 4) * 0.1 + 0.3,
+    }));
+  }, []);
 
   const updateTabBarVisibility = useCallback((shouldHide: boolean) => {
     if (isTabBarHiddenShared.value !== shouldHide) {
@@ -627,30 +491,7 @@ export default function DiscoverScreen() {
     rotateY.value = withTiming(newFlippedState ? 180 : 0, { duration: 600 });
   };
 
-  // Helper function to save swipe action
-  const saveSwipeAction = useCallback(async (direction: 'left' | 'right') => {
-    if (profiles.length === 0 || currentProfileIndex >= profiles.length) return;
 
-    const currentProfile = profiles[currentProfileIndex];
-    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
-
-    if (likedUserId) {
-      const actionType = direction === 'right' ? 'like' : 'dislike';
-      try {
-        const result = await saveUserLike(likedUserId, actionType);
-        if (result.success) {
-          if (actionType === 'like') signalLike(likedUserId);
-          else if (actionType === 'dislike') signalDislike(likedUserId);
-        }
-        if (result.success && actionType === 'like') {
-          // Check for match only on like (not dislike)
-          await checkAndShowMatch(likedUserId, currentProfile);
-        }
-      } catch (error) {
-        console.error(`Error saving ${actionType} from swipe:`, error);
-      }
-    }
-  }, [profiles, currentProfileIndex, checkAndShowMatch]);
 
 
   useEffect(() => {
@@ -717,59 +558,7 @@ export default function DiscoverScreen() {
     setShowReportReasonModal(true);
   }, []);
 
-  const submitReport = useCallback(
-    async (reason: string) => {
-      if (!reportingProfile?.id || isSubmittingReport) return;
 
-      const reportedUserId = String(reportingProfile.id);
-      setIsSubmittingReport(true);
-
-      try {
-        const result = await createReport(
-          reportedUserId,
-          'Discover profile report',
-          reason,
-          `Reported from discover card for user ${reportedUserId}`
-        );
-
-        if (!result.success) {
-          console.error('❌ Failed to save report:', result.error);
-          return;
-        }
-
-        setProfiles((current) => {
-          const filtered = current.filter((p) => String(p.id) !== reportedUserId);
-          if (filtered.length === 0) {
-            setCurrentProfileIndex(0);
-            return filtered;
-          }
-
-          const removedBeforeCurrent = current
-            .slice(0, currentProfileIndex)
-            .some((p) => String(p.id) === reportedUserId);
-          const nextIndex = removedBeforeCurrent
-            ? Math.max(0, currentProfileIndex - 1)
-            : Math.min(currentProfileIndex, filtered.length - 1);
-          setCurrentProfileIndex(nextIndex);
-
-          return filtered;
-        });
-
-        setShowReportReasonModal(false);
-        setReportingProfile(null);
-        setReportedUserIds((prev) => {
-          const next = new Set(prev);
-          next.add(reportedUserId);
-          return next;
-        });
-      } catch (error) {
-        console.error('❌ Error while reporting user:', error);
-      } finally {
-        setIsSubmittingReport(false);
-      }
-    },
-    [reportingProfile, isSubmittingReport, currentProfileIndex]
-  );
 
   const doubleTapGesture = Gesture.Tap()
     .enabled(!isFlipped && !isTransitioning)
