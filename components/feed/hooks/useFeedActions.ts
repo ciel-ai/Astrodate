@@ -123,7 +123,7 @@ export function useFeedActions({
     setShowMatchModal,
   ]);
 
-  const handleLike = useCallback(async () => {
+  const handleLike = useCallback(async (promptId?: string, comment?: string) => {
     if (isFlipped || isTransitioning || profiles.length === 0 || currentProfileIndex >= profiles.length) return;
 
     setIsTransitioning(true);
@@ -144,7 +144,7 @@ export function useFeedActions({
 
     if (likedUserId) {
       try {
-        const result = await saveUserLike(likedUserId, 'like');
+        const result = await saveUserLike(likedUserId, 'like', promptId, comment);
         if (result.success) {
           signalLike(likedUserId);
           await checkAndShowMatch(likedUserId, currentProfile);

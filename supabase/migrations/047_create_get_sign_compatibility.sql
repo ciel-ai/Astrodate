@@ -1,0 +1,4 @@
+-- Migration 047: Implement get_sign_compatibility (MOVED)
+-- The contents of this migration were moved to the top of 044_synastry_cache_details.sql
+-- to resolve dependency ordering issues. This file remains as a no-op to maintain
+-- migration sequence history.

@@ -1,0 +1,137 @@
+----- app\filters.tsx -----
+23: import { useAuthAlert } from '@/lib/auth-alert-context';
+37: const { showAlert } = useAuthAlert();
+480: // Don't show alert on initial load failure, just use defaults
+492: showAlert('Error', 'User not authenticated');
+499: showAlert('Error', 'Minimum age must be less than maximum age');
+533: showAlert(
+540: showAlert(
+546: showAlert('Error', result.error.message || 'Failed to save preferences');
+550: showAlert('Success', 'All preferences saved successfully!');
+556: showAlert('Error', errorMessage);
+563: showAlert(
+611: showAlert('Success', 'All preferences have been reset to default values.');
+615: showAlert('Error', 'Failed to reset preferences. Please try again.');
+677: showAlert(
+744: showAlert('Error', msg);
+756: showAlert('Error', 'User not authenticated');
+775: showAlert('Saved', 'Location set to your current location');
+778: showAlert('Error', err?.message || 'Failed to save location');
+791: showAlert('Error', 'User not authenticated');
+799: showAlert('Error', 'Please select a sexual orientation');
+861: showAlert('Saved', 'Changes saved successfully');
+864: showAlert('Error', err?.message || 'Failed to save changes');
+877: showAlert('Error', 'User not authenticated');
+918: showAlert('Saved', 'Changes saved successfully');
+921: showAlert('Error', err?.message || 'Failed to save changes');
+----- app\(tabs)\profile.tsx -----
+29: import { useAuthAlert } from '@/lib/auth-alert-context';
+186: const { showAlert } = useAuthAlert();
+477: if (isMountedRef.current) showAlert('Error', 'Failed to load profile data. Please try again.');
+500: showAlert('Permission denied', 'Location permission is required to auto-fill your location.');
+524: showAlert('Location Error', 'Could not determine your city.');
+528: if (isMountedRef.current) showAlert('Error', 'Failed to get location. Please try again.');
+545: showAlert('Error', 'User not authenticated');
+554: showAlert('Profile data missing', 'Phone number or email is missing in your account. Please complete onboarding first.');
+572: showAlert('Error', profileResult.error || 'Failed to save profile');
+627: showAlert('Success', 'Profile updated successfully!');
+635: if (isMountedRef.current) showAlert('Error', 'Failed to save profile. Please try again.');
+664: showAlert('Error', result.error || 'Failed to remove photo');
+670: if (isMountedRef.current) showAlert('Error', message);
+----- app\onboarding\basic-details.tsx -----
+18: import { useAuthAlert } from '@/lib/auth-alert-context';
+118: const { showAlert } = useAuthAlert();
+254: showAlert('Error', result.error || 'Failed to save profile. Please try again.');
+263: showAlert('Error', 'Failed to save your details. Please try again.');
+285: showAlert('Permission denied', 'Location permission required to auto-fill.');
+296: showAlert('Location Error', 'Could not determine your city.');
+299: showAlert('Error', 'Failed to get location. Please try again.');
+----- app\onboarding\birth-details.tsx -----
+18: import { useAuthAlert } from '@/lib/auth-alert-context';
+45: const { showAlert } = useAuthAlert();
+431: showAlert(
+----- app\onboarding\login.tsx -----
+2: import { useAuthAlert } from '@/lib/auth-alert-context';
+22: const { showAlert } = useAuthAlert();
+75: showAlert('Account Not Found', 'No account found with this Google email. Please sign up first.',
+89: showAlert('Phone number required', 'Please enter your phone number');
+96: showAlert('Invalid phone number', 'Please enter a valid phone number');
+103: showAlert('Invalid phone number', 'Please enter a valid phone number');
+120: showAlert(
+163: showAlert('OTP Generation Failed', errorMessage);
+170: showAlert('OTP Generation Failed', 'No response from server. Please check your Supabase configuration.');
+182: showAlert('Login error', err?.message ?? String(err) ?? 'An unexpected error occurred. Please try again.');
+216: showAlert('OAuth error', error.message || 'Could not start OAuth');
+223: showAlert('OAuth error', 'Invalid OAuth response from Supabase');
+294: showAlert('Authentication Error', 'Could not establish session. Please try again.');
+311: showAlert('Authentication Error', 'Session not found. Please try again.');
+324: showAlert('OAuth error', err?.message ?? String(err));
+----- app\onboarding\otp-verify.tsx -----
+1: import { useAuthAlert } from '@/lib/auth-alert-context';
+23: const { showAlert } = useAuthAlert();
+108: showAlert('Invalid OTP', 'Please enter all 6 digits');
+114: showAlert('Verification Failed', 'Invalid phone number. Please go back and try again.');
+132: // Show user-friendly alert message
+142: showAlert('Verification Failed', errorMessage);
+174: showAlert(
+198: showAlert('Verification Failed', 'Session not created. Please try again.');
+207: showAlert('Verification Failed', 'An error occurred. Please try again.');
+225: showAlert('Resend Failed', 'Invalid phone number. Please go back and try again.');
+238: showAlert('Resend Failed', error.message || 'Could not resend OTP. Please try again.');
+246: showAlert('OTP Resent', 'A new OTP has been sent to your phone number');
+249: showAlert('Resend Failed', err?.message || 'Could not resend OTP. Please try again.');
+----- app\onboarding\phone-verification.tsx -----
+1: import { useAuthAlert } from '@/lib/auth-alert-context';
+23: const { showAlert } = useAuthAlert();
+104: showAlert('Invalid OTP', 'Please enter all 6 digits');
+110: showAlert('Verification Failed', 'Invalid phone number. Please go back and try again.');
+128: // Show user-friendly alert message
+138: showAlert('Verification Failed', errorMessage);
+161: showAlert('Verification Failed', 'Session not created. Please try again.');
+170: showAlert('Verification Failed', 'An error occurred. Please try again.');
+186: showAlert('Resend Failed', 'Invalid phone number. Please go back and try again.');
+199: showAlert('Resend Failed', error.message || 'Could not resend OTP. Please try again.');
+207: showAlert('OTP Resent', 'A new OTP has been sent to your phone number');
+210: showAlert('Resend Failed', err?.message || 'Could not resend OTP. Please try again.');
+----- app\onboarding\photo_upload.tsx -----
+15: import { useAuthAlert } from '@/lib/auth-alert-context';
+45: const { showAlert } = useAuthAlert();
+79: showAlert(
+92: showAlert('Maximum Photos Reached', `You can only upload up to ${MAX_PHOTOS} photos.`);
+97: showAlert(
+170: showAlert('Error', 'Failed to pick image. Please try again.');
+176: showAlert('Maximum Photos Reached', `You can only upload up to ${MAX_PHOTOS} photos.`);
+182: showAlert(
+202: showAlert('Error', 'Failed to take photo. Please try again.');
+225: showAlert(
+241: showAlert(
+264: showAlert(
+278: showAlert(
+297: showAlert(
+313: showAlert(
+324: showAlert(
+379: <Ionicons name="alert-circle" size={24} color="#EF4444" />
+458: <Ionicons name="alert-circle" size={20} color="#EF4444" />
+----- app\onboarding\signup.tsx -----
+2: import { useAuthAlert } from '@/lib/auth-alert-context';
+20: const { showAlert } = useAuthAlert();
+66: showAlert(
+88: showAlert('Phone number required', 'Please enter your phone number');
+94: showAlert('Invalid phone number', 'Please enter a valid phone number');
+101: showAlert('Invalid phone number', 'Please enter a valid phone number');
+119: showAlert(
+149: showAlert(
+182: showAlert('OTP Generation Failed', errorMessage);
+188: showAlert('OTP Generation Failed', 'No response from server. Please check your Supabase configuration.');
+199: showAlert('OTP generation error', err?.message ?? String(err) ?? 'An unexpected error occurred. Please try again.');
+----- app\onboarding\zodiac-preview.tsx -----
+7: import { useAuthAlert } from '@/lib/auth-alert-context';
+167: const { showAlert } = useAuthAlert();
+333: showAlert('Error', result.error || 'Failed to save astro details');
+342: showAlert('Error', 'Failed to save your details. Please try again.');
+----- app\settings.tsx -----
+1: import { useAuthAlert } from '@/lib/auth-alert-context';
+21: const { showAlert } = useAuthAlert();
+111: showAlert('Logout', 'Are you sure you want to logout?', [
+120: showAlert('Logout Failed', error.message || 'Could not logout. Please try again.', [{ text: 'OK' }], 'error');
+126: showAlert('Logout Failed', 'Could not logout. Please try again.', [{ text: 'OK' }], 'error');

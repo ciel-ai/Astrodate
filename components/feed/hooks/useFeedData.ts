@@ -253,12 +253,13 @@ export function useFeedData() {
     if (userIds.length === 0) return [];
 
     try {
-      const [photosBatch, astroBatch, section1Batch, onboardingBatch, personalityBatch] = await Promise.all([
+      const [photosBatch, astroBatch, section1Batch, onboardingBatch, personalityBatch, promptsBatch] = await Promise.all([
         (supabase.rpc as any)('get_user_photos_batch', { p_user_ids: userIds }),
         supabase.from('astro_details').select('*').in('user_id', userIds),
         supabase.from('section1_qns').select('*').in('user_id', userIds),
         supabase.from('onboarding_responses').select('*').in('user_id', userIds),
         supabase.from('personality_qns').select('*').in('user_id', userIds),
+        supabase.from('user_prompts').select('*').in('user_id', userIds),
       ]);
 
       const allPhotos: { user_id: string; photo_url: string; is_primary: boolean }[] = photosBatch.data || [];
@@ -266,6 +267,7 @@ export function useFeedData() {
       const allSection1 = section1Batch.data || [];
       const allOnboarding = onboardingBatch.data || [];
       const allPersonality = personalityBatch.data || [];
+      const allPrompts = (promptsBatch.data || []) as any[];
 
       return results.map((m: any, idx: number) => {
         const userId = m.match_user_id;
@@ -274,6 +276,7 @@ export function useFeedData() {
         const section1Data = allSection1.find(s => s.user_id === userId);
         const onboardingData = allOnboarding.find(o => o.user_id === userId);
         const personalityData = allPersonality.find(p => p.user_id === userId);
+        const userPrompts = allPrompts.filter((p: any) => p.user_id === userId);
 
         let primaryPhoto = null;
         let photos: { uri: string }[] = [];
@@ -318,6 +321,12 @@ export function useFeedData() {
           introvert_extrovert: section1Data?.introvert_extrovert || undefined,
           partner_preference: section1Data?.partner_preference ? (Array.isArray(section1Data.partner_preference) ? section1Data.partner_preference : []) : undefined,
           gender: m.gender || undefined,
+          prompts: userPrompts.map((p: any) => ({
+            prompt_id: p.prompt_id,
+            question: p.question,
+            answer: p.answer,
+            is_custom: p.is_custom,
+          })),
           personality_detail: personalityData ? {
             date_type: personalityData.what_type_of_date_excites_you_the_most || undefined,
             unusual_foods: personalityData.how_do_you_feel_about_trying_unusual_foods_or_activities || undefined,

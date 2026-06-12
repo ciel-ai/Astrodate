@@ -32,6 +32,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
     type NativeScrollEvent,
@@ -253,6 +254,12 @@ export default function DiscoverScreen() {
   const [matchAstroScore, setMatchAstroScore] = useState<number | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
 
+  // Prompt liking comment modal states
+  const [showLikePromptModal, setShowLikePromptModal] = useState(false);
+  const [likePromptId, setLikePromptId] = useState<string | null>(null);
+  const [likePromptQuestion, setLikePromptQuestion] = useState<string | null>(null);
+  const [likePromptComment, setLikePromptComment] = useState('');
+
   // ── Swipe tutorial ──────────────────────────────────────────────────────────
   const { isHidden: isTabBarHidden, setHidden: setTabBarHidden } = useTabBarVisibility();
   const {
@@ -379,6 +386,20 @@ export default function DiscoverScreen() {
   });
 
   // Removed missed-match popup logic
+
+  const handleLikePrompt = useCallback((promptId: string, question: string) => {
+    setLikePromptId(promptId);
+    setLikePromptQuestion(question);
+    setLikePromptComment('');
+    setShowLikePromptModal(true);
+  }, []);
+
+  const submitLikePrompt = useCallback(async () => {
+    setShowLikePromptModal(false);
+    if (likePromptId) {
+      await handleLike(likePromptId, likePromptComment);
+    }
+  }, [likePromptId, likePromptComment, handleLike]);
 
   // Fixed heart positions for match modal
   const matchHearts = useMemo(() => {
@@ -579,6 +600,7 @@ export default function DiscoverScreen() {
         onRouteToDetails={(p) =>
           router.push({ pathname: '/profile-details', params: { userId: p.id, initialData: JSON.stringify(p) } })
         }
+        onLikePrompt={handleLikePrompt}
       />
     );
   };
@@ -777,6 +799,53 @@ export default function DiscoverScreen() {
         matchIcebreaker={matchIcebreaker}
         onSendMessage={handleSendMessageFromMatchModal}
       />
+
+      {/* Prompt Like Comment Modal */}
+      <Modal
+        visible={showLikePromptModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLikePromptModal(false)}
+      >
+        <View style={styles.promptLikeModalOverlay}>
+          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.promptLikeModalContent}>
+            <Text style={styles.promptLikeModalTitle}>Like this Prompt?</Text>
+            
+            {likePromptQuestion && (
+              <View style={styles.promptLikeQuestionBox}>
+                <Text style={styles.promptLikeQuestionText}>{likePromptQuestion}</Text>
+              </View>
+            )}
+
+            <TextInput
+              style={styles.promptLikeInput}
+              placeholder="Add a comment... (optional)"
+              placeholderTextColor="rgba(255, 255, 255, 0.4)"
+              value={likePromptComment}
+              onChangeText={setLikePromptComment}
+              maxLength={200}
+              multiline={true}
+            />
+
+            <View style={styles.promptLikeButtonRow}>
+              <TouchableOpacity
+                style={[styles.promptLikeBtn, styles.promptLikeCancelBtn]}
+                onPress={() => setShowLikePromptModal(false)}
+              >
+                <Text style={styles.promptLikeBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.promptLikeBtn, styles.promptLikeSendBtn]}
+                onPress={submitLikePrompt}
+              >
+                <Text style={[styles.promptLikeBtnText, { color: '#000000', fontWeight: '700' }]}>Send Like</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Compatibility Detail Modal */}
       <Modal
@@ -1348,5 +1417,86 @@ const styles = StyleSheet.create({
   reportSubmittingText: {
     color: 'rgba(255,255,255,0.9)',
     fontSize: 13,
+  },
+
+  // Prompt targeted liking comment modal styles
+  promptLikeModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  promptLikeModalContent: {
+    width: '100%',
+    backgroundColor: '#1C0F38',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    padding: 24,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+    gap: 16,
+  },
+  promptLikeModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  promptLikeQuestionBox: {
+    backgroundColor: '#13082B',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(236, 72, 153, 0.25)',
+  },
+  promptLikeQuestionText: {
+    color: '#EC4899',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  promptLikeInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    padding: 16,
+    color: '#FFFFFF',
+    fontSize: 15,
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  promptLikeButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  promptLikeBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  promptLikeCancelBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  promptLikeSendBtn: {
+    backgroundColor: '#C084FC',
+  },
+  promptLikeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

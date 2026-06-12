@@ -186,12 +186,25 @@ export const getDynamicBio = (profile: Profile): string => {
     return parts.join(' ');
   }
 
-  return "I love deep conversations, spontaneous adventures and meaningful connections. Let's create beautiful memories together ✨";
+  return "";
 };
 
-export const getPromptsForProfile = (profile: Profile): { question: string; answer: string }[] => {
+export const getPromptsForProfile = (profile: Profile): { question: string; answer: string; prompt_id?: string }[] => {
   const pd = profile.personality_detail;
-  const prompts: { question: string; answer: string }[] = [];
+  const prompts: { question: string; answer: string; prompt_id?: string }[] = [];
+
+  // Add custom user prompts first if they exist
+  if (profile.prompts && profile.prompts.length > 0) {
+    profile.prompts.forEach((p) => {
+      if (p.question && p.answer) {
+        prompts.push({
+          prompt_id: p.prompt_id,
+          question: p.question,
+          answer: p.answer,
+        });
+      }
+    });
+  }
 
   if (pd) {
     if (pd.date_type && pd.date_type.length > 0) {

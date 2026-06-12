@@ -36,6 +36,7 @@ interface ProfileCardProps {
   parallaxScrollRef: React.RefObject<Animated.ScrollView>;
   navigateToDetails: () => void;
   onRouteToDetails: (profile: Profile) => void;
+  onLikePrompt?: (promptId: string, question: string) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ export function ProfileCard({
   parallaxScrollRef,
   navigateToDetails,
   onRouteToDetails,
+  onLikePrompt,
 }: ProfileCardProps) {
   const profilePhotos =
     profile.photos && profile.photos.length > 0
@@ -66,7 +68,7 @@ export function ProfileCard({
       ? profile.hobbies.map(formatHobby)
       : profile.interests && profile.interests.length > 0
       ? profile.interests.map(formatHobby)
-      : ['Travel', 'Music', 'Coffee', 'Astrology'];
+      : [];
 
   let cosmicMatchDesc = `You and ${profile.name} share moderate cosmic connection.`;
   if (compatibilityScore >= 80) {
@@ -193,7 +195,7 @@ export function ProfileCard({
                         <Text style={cardStyles.newCardHeaderText}>About {profile.name.split(' ')[0] || profile.name}</Text>
                       </View>
                       <Text style={cardStyles.aboutBodyFullWidth} numberOfLines={5}>
-                        {getDynamicBio(profile)}
+                        {getDynamicBio(profile) || "I'm still writing my bio..."}
                       </Text>
                       <TouchableOpacity
                         style={cardStyles.newMoreButtonHalf}
@@ -210,17 +212,21 @@ export function ProfileCard({
                         <Text style={cardStyles.newCardHeaderText}>Interests</Text>
                       </View>
                       <View style={cardStyles.interestsWrapRow}>
-                        {rawInterests.slice(0, 4).map((interest, idx) => (
-                          <View key={idx} style={cardStyles.newInterestItemChip}>
-                            <MaterialIcons
-                              name={getInterestIcon(interest) as any}
-                              size={12}
-                              color="#C084FC"
-                              style={{ marginRight: 2 }}
-                            />
-                            <Text style={cardStyles.newInterestItemText}>{interest}</Text>
-                          </View>
-                        ))}
+                        {rawInterests.length > 0 ? (
+                          rawInterests.slice(0, 4).map((interest, idx) => (
+                            <View key={idx} style={cardStyles.newInterestItemChip}>
+                              <MaterialIcons
+                                name={getInterestIcon(interest) as any}
+                                size={12}
+                                color="#C084FC"
+                                style={{ marginRight: 2 }}
+                              />
+                              <Text style={cardStyles.newInterestItemText}>{interest}</Text>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={[cardStyles.newInterestItemText, { opacity: 0.5, fontStyle: 'italic', paddingVertical: 8 }]}>Not added yet</Text>
+                        )}
                       </View>
                     </View>
                   </View>
@@ -231,48 +237,79 @@ export function ProfileCard({
                   </View>
                   {/* Prompt 1 */}
                   <View style={cardStyles.mockupPromptCard}>
-                    <Text style={cardStyles.mockupPromptQuestion}>{prompts[0].question}</Text>
-                    <Text style={cardStyles.mockupPromptAnswer}>{prompts[0].answer}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={cardStyles.mockupPromptQuestion}>{prompts[0].question}</Text>
+                        <Text style={cardStyles.mockupPromptAnswer}>{prompts[0].answer}</Text>
+                      </View>
+                      {onLikePrompt && (
+                        <TouchableOpacity
+                          style={cardStyles.promptHeartButton}
+                          activeOpacity={0.7}
+                          onPress={() => onLikePrompt(prompts[0].prompt_id || 'prompt_1', prompts[0].question)}
+                        >
+                          <IonIcons name="heart" size={18} color="#EC4899" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
 
                   {/* Photo 3 */}
                   <View style={cardStyles.mockupPhotoContainer}>
                     <Image source={resolvePhotoSource(profilePhotos[2 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
                   </View>
-                  {/* Prompt 2 */}
-                  <View style={cardStyles.mockupPromptCard}>
-                    <Text style={cardStyles.mockupPromptQuestion}>{prompts[1].question}</Text>
-                    <Text style={cardStyles.mockupPromptAnswer}>{prompts[1].answer}</Text>
-                  </View>
 
                   {/* Photo 4 */}
                   <View style={cardStyles.mockupPhotoContainer}>
                     <Image source={resolvePhotoSource(profilePhotos[3 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
                   </View>
-                  {/* Prompt 3 */}
+
+                  {/* Prompt 2 */}
                   <View style={cardStyles.mockupPromptCard}>
-                    <Text style={cardStyles.mockupPromptQuestion}>{prompts[2].question}</Text>
-                    <Text style={cardStyles.mockupPromptAnswer}>{prompts[2].answer}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={cardStyles.mockupPromptQuestion}>{prompts[1].question}</Text>
+                        <Text style={cardStyles.mockupPromptAnswer}>{prompts[1].answer}</Text>
+                      </View>
+                      {onLikePrompt && (
+                        <TouchableOpacity
+                          style={cardStyles.promptHeartButton}
+                          activeOpacity={0.7}
+                          onPress={() => onLikePrompt(prompts[1].prompt_id || 'prompt_2', prompts[1].question)}
+                        >
+                          <IonIcons name="heart" size={18} color="#EC4899" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
 
                   {/* Photo 5 */}
                   <View style={cardStyles.mockupPhotoContainer}>
                     <Image source={resolvePhotoSource(profilePhotos[4 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
                   </View>
-                  {/* Prompt 4 */}
+
+                  {/* Prompt 3 */}
                   <View style={cardStyles.mockupPromptCard}>
-                    <Text style={cardStyles.mockupPromptQuestion}>{prompts[3].question}</Text>
-                    <Text style={cardStyles.mockupPromptAnswer}>{prompts[3].answer}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={cardStyles.mockupPromptQuestion}>{prompts[2].question}</Text>
+                        <Text style={cardStyles.mockupPromptAnswer}>{prompts[2].answer}</Text>
+                      </View>
+                      {onLikePrompt && (
+                        <TouchableOpacity
+                          style={cardStyles.promptHeartButton}
+                          activeOpacity={0.7}
+                          onPress={() => onLikePrompt(prompts[2].prompt_id || 'prompt_3', prompts[2].question)}
+                        >
+                          <IonIcons name="heart" size={18} color="#EC4899" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
 
                   {/* Photo 6 */}
                   <View style={cardStyles.mockupPhotoContainer}>
                     <Image source={resolvePhotoSource(profilePhotos[5 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
-                  </View>
-                  {/* Prompt 5 */}
-                  <View style={cardStyles.mockupPromptCard}>
-                    <Text style={cardStyles.mockupPromptQuestion}>{prompts[4].question}</Text>
-                    <Text style={cardStyles.mockupPromptAnswer}>{prompts[4].answer}</Text>
                   </View>
                 </View>
 
@@ -616,5 +653,20 @@ export const cardStyles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 28,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+  },
+  promptHeartButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(236, 72, 153, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(236, 72, 153, 0.45)',
+    shadowColor: '#EC4899',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
 });

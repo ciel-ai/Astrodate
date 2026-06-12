@@ -1,0 +1,1 @@
+export type { VedicKootaDetail, VedicMatchReport } from '../supabase/functions/_shared/astro-types';

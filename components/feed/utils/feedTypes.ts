@@ -49,4 +49,10 @@ export type Profile = {
     emotional_handling?: string;
     overthink?: string;
   };
+  prompts?: {
+    prompt_id: string;
+    question: string;
+    answer: string;
+    is_custom: boolean;
+  }[];
 };
