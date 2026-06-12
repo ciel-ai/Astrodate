@@ -77,11 +77,13 @@ const styles = StyleSheet.create({
   },
   grid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: 8,
   },
   card: {
-    flex: 1,
+    width: '48%',
+    flexGrow: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
     padding: 12,

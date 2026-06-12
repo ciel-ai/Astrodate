@@ -2,7 +2,7 @@ import { checkMutualLike, saveUserLike, withdrawUserLike } from '@/lib/user-like
 import { getUserPhotos } from '@/lib/user-photos';
 import { getZodiacCompatibility } from '@/lib/astro';
 import { supabase } from '@/lib/supabase';
-import { FontAwesome, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { FontAwesome, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
@@ -457,15 +457,39 @@ export default function ProfileDetailsScreen() {
             bounces={true}
           >
             {/* 1. Hero photo */}
-            <ProfileHero
-              name={profile.name}
-              age={profile.age}
-              image={profile.image}
-              photos={profile.photos}
-              isSuperlikedByProfile={isSuperlikedByProfile}
-              currentImageIndex={currentImageIndex}
-              onPhotoTap={handlePhotoTap}
-            />
+            <View>
+              <ProfileHero
+                name={profile.name}
+                age={profile.age}
+                image={profile.image}
+                photos={profile.photos}
+                isSuperlikedByProfile={isSuperlikedByProfile}
+                currentImageIndex={currentImageIndex}
+                onPhotoTap={handlePhotoTap}
+              />
+              
+              {/* Withdraw Button positioned at top right over the hero image */}
+              {params.source === 'sent' && (
+                <View style={styles.topRightFloatingButtonContainer}>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.withdrawButton}
+                    onPress={handleWithdraw}
+                  >
+                    <LinearGradient
+                      colors={['rgba(192, 132, 252, 0.15)', 'rgba(11, 4, 21, 0.9)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    
+                    <View style={styles.withdrawInner}>
+                      <FontAwesome5 name="heart-broken" size={24} color="#E879F9" />
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
 
             {/* 2. Astro badges */}
             <AstroBadges
@@ -508,6 +532,8 @@ export default function ProfileDetailsScreen() {
               interests={profile.interests}
               hobbies={profile.hobbies}
             />
+
+            {/* Likes sent: Withdraw button moved to top of image */}
           </ScrollView>
 
           {/* Action buttons — only for feed/discover context */}
@@ -526,25 +552,6 @@ export default function ProfileDetailsScreen() {
               onSuperLike={handleSuperLike} // Maybe hide superlike? Re-using for now.
               onLike={handleLike}
             />
-          )}
-
-          {/* Likes sent: only Withdraw (like Hinge's "Remove Like") */}
-          {params.source === 'sent' && (
-            <View style={styles.actionIconsContainer}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.actionButtonSmallWrapper}
-                onPress={handleWithdraw}
-              >
-                <View style={[styles.actionIconGlassy, { flexDirection: 'row', paddingHorizontal: 24, width: 'auto', minWidth: 160, height: 56, borderRadius: 28 }]}>
-                  <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-                  <MaterialIcons name="undo" size={22} color="#FFFFFF" style={{ opacity: 0.8, marginRight: 8 }} />
-                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '600', opacity: 0.9 }}>
-                    Withdraw Like
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
           )}
         </View>
 
@@ -779,6 +786,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 8,
+  },
+  topRightFloatingButtonContainer: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
+    zIndex: 20,
+  },
+  withdrawButton: {
+    height: 56,
+    width: 56,
+    backgroundColor: 'transparent',
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: 'rgba(192, 132, 252, 0.6)',
+    padding: 4,
+    overflow: 'hidden',
+    shadowColor: '#C084FC',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  withdrawInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(192, 132, 252, 0.3)',
+    borderStyle: 'dashed',
   },
   matchOverlay: {
     flex: 1,

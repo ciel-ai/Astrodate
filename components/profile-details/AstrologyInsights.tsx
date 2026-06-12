@@ -36,7 +36,7 @@ export default function AstrologyInsights({
             </View>
             {strengths.map((item, index) => (
               <View key={`strength-${index}`} style={styles.listItem}>
-                <Ionicons name="checkmark-circle-outline" size={14} color="#34D399" />
+                <Ionicons name="checkmark-circle-outline" size={14} color="#34D399" style={styles.listIcon} />
                 <Text style={styles.listText}>{item}</Text>
               </View>
             ))}
@@ -50,7 +50,7 @@ export default function AstrologyInsights({
             </View>
             {challenges.map((item, index) => (
               <View key={`challenge-${index}`} style={styles.listItem}>
-                <Ionicons name="ellipse-outline" size={14} color="#FBBF24" />
+                <Ionicons name="ellipse-outline" size={14} color="#FBBF24" style={styles.listIcon} />
                 <Text style={styles.listText}>{item}</Text>
               </View>
             ))}
@@ -130,9 +130,12 @@ const styles = StyleSheet.create({
   },
   listItem: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  listIcon: {
+    marginTop: 2,
   },
   listText: {
     fontSize: 13,

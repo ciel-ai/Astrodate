@@ -9,6 +9,11 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { Ionicons } from '@expo/vector-icons';
+
+WebBrowser.maybeCompleteAuthSession();
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -38,6 +43,7 @@ export default function LoginScreen() {
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const isMountedRef = useRef(true);
 
   useLayoutEffect(() => {
@@ -108,6 +114,81 @@ export default function LoginScreen() {
     }
   };
 
+  const checkUserAndNavigate = async (userId?: string) => {
+    if (!userId) {
+      router.replace('/onboarding/welcome');
+      return;
+    }
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (profile) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/onboarding/welcome');
+    }
+  };
+
+  const handleSocialLogin = async (provider: 'google' | 'apple') => {
+    try {
+      setIsLoggingIn(true);
+      const redirectUrl = Linking.createURL('/auth/callback');
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+        if (result.type === 'success' && result.url) {
+          const parsed = Linking.parse(result.url);
+          let code = parsed.queryParams?.code;
+          
+          if (!code && result.url.includes('?')) {
+             const query = result.url.split('?')[1];
+             const params = new URLSearchParams(query);
+             code = params.get('code');
+          }
+
+          if (code) {
+             const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
+             if (sessionError) throw sessionError;
+             await checkUserAndNavigate(sessionData.session?.user?.id);
+          } else if (result.url.includes('#access_token')) {
+             const hash = result.url.split('#')[1];
+             const params = new URLSearchParams(hash);
+             const access_token = params.get('access_token');
+             const refresh_token = params.get('refresh_token');
+             
+             if (access_token && refresh_token) {
+               const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
+               await checkUserAndNavigate(sessionData.session?.user?.id);
+             } else {
+               router.replace('/onboarding/welcome');
+             }
+          } else {
+            router.replace('/onboarding/welcome');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Social login error:', err);
+      showAlert('Login error', 'Social login failed. Please try again.');
+    } finally {
+      if (isMountedRef.current) setIsLoggingIn(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -129,8 +210,8 @@ export default function LoginScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            scrollEnabled={isKeyboardVisible}
-            bounces={isKeyboardVisible}
+            scrollEnabled={true}
+            bounces={true}
           >
 
             {/* Header Section (Welcome Back) */}
@@ -211,6 +292,45 @@ export default function LoginScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
+              {/* OR Divider */}
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              {/* Social Login Buttons */}
+              <View style={styles.authButtonsContainer}>
+                <TouchableOpacity 
+                  style={[styles.socialButton, styles.appleButton, isLoggingIn && styles.buttonDisabled]} 
+                  onPress={() => handleSocialLogin('apple')}
+                  disabled={isLoggingIn}
+                >
+                  {isLoggingIn ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-apple" size={18} color="#FFFFFF" style={styles.socialIcon} />
+                      <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.socialButton, styles.googleButton, isLoggingIn && styles.buttonDisabled]} 
+                  onPress={() => handleSocialLogin('google')}
+                  disabled={isLoggingIn}
+                >
+                  {isLoggingIn ? (
+                    <ActivityIndicator color="#000000" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={18} color="#000000" style={styles.socialIcon} />
+                      <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
 
               {/* Sign up link */}
               <View style={styles.signupRow}>
@@ -270,7 +390,7 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     alignItems: 'center',
-    marginTop: SCREEN_HEIGHT * 0.40, // shifted down to align beautifully below the heart
+    marginTop: SCREEN_HEIGHT * 0.30, // shifted up slightly to fit new buttons
     marginBottom: 12,
     paddingHorizontal: 24,
   },
@@ -399,6 +519,51 @@ const styles = StyleSheet.create({
     color: '#A855F7',
     fontWeight: '600',
     fontSize: 13,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  dividerText: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginHorizontal: 12,
+    fontSize: 12,
+  },
+  authButtonsContainer: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 30,
+  },
+  socialIcon: {
+    marginRight: 8,
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+  },
+  googleButtonText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

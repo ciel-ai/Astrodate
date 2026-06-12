@@ -1,13 +1,20 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { supabase } from '@/lib/supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SplashScreen() {
   const router = useRouter();
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showCombinedModal, setShowCombinedModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'terms' | 'privacy'>('terms');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const handleCheckboxPress = () => {
@@ -27,6 +34,84 @@ export default function SplashScreen() {
   const handleGetStarted = () => {
     if (agreedToTerms) {
       router.replace('/onboarding/welcome');
+    }
+  };
+
+  const checkUserAndNavigate = async (userId?: string) => {
+    if (!userId) {
+      router.replace('/onboarding/welcome');
+      return;
+    }
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (profile) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/onboarding/welcome');
+    }
+  };
+
+  const handleSocialLogin = async (provider: 'google' | 'apple') => {
+    if (!agreedToTerms) return;
+    
+    try {
+      setIsLoggingIn(true);
+      const redirectUrl = Linking.createURL('/auth/callback');
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+        if (result.type === 'success' && result.url) {
+          const parsed = Linking.parse(result.url);
+          let code = parsed.queryParams?.code;
+          
+          if (!code && result.url.includes('?')) {
+             const query = result.url.split('?')[1];
+             const params = new URLSearchParams(query);
+             code = params.get('code');
+          }
+
+          if (code) {
+             const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
+             if (sessionError) throw sessionError;
+             await checkUserAndNavigate(sessionData.session?.user?.id);
+          } else if (result.url.includes('#access_token')) {
+             const hash = result.url.split('#')[1];
+             const params = new URLSearchParams(hash);
+             const access_token = params.get('access_token');
+             const refresh_token = params.get('refresh_token');
+             
+             if (access_token && refresh_token) {
+               const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
+               await checkUserAndNavigate(sessionData.session?.user?.id);
+             } else {
+               router.replace('/onboarding/welcome');
+             }
+          } else {
+            // Unhandled URL format, fallback to onboarding
+            router.replace('/onboarding/welcome');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Social login error:', err);
+      alert('Login failed. Please try again.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -87,16 +172,43 @@ export default function SplashScreen() {
           </View>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.getStartedButton, !agreedToTerms && styles.buttonDisabled]} 
-          onPress={handleGetStarted}
-          activeOpacity={agreedToTerms ? 0.8 : 1}
-          disabled={!agreedToTerms}
-        >
-          <Text style={[styles.buttonText, !agreedToTerms && styles.buttonTextDisabled]}>
-            Get Started
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.authButtonsContainer}>
+          <TouchableOpacity 
+            style={[styles.socialButton, styles.appleButton, (!agreedToTerms || isLoggingIn) && styles.buttonDisabled]} 
+            onPress={() => handleSocialLogin('apple')}
+            activeOpacity={agreedToTerms ? 0.8 : 1}
+            disabled={!agreedToTerms || isLoggingIn}
+          >
+            {isLoggingIn ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
+                <Text style={styles.appleButtonText}>
+                  Continue with Apple
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.socialButton, styles.googleButton, (!agreedToTerms || isLoggingIn) && styles.buttonDisabled]} 
+            onPress={() => handleSocialLogin('google')}
+            activeOpacity={agreedToTerms ? 0.8 : 1}
+            disabled={!agreedToTerms || isLoggingIn}
+          >
+            {isLoggingIn ? (
+              <ActivityIndicator color="#000000" size="small" />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={20} color="#000000" style={styles.socialIcon} />
+                <Text style={styles.googleButtonText}>
+                  Continue with Google
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Combined Terms & Privacy Modal */}
@@ -393,30 +505,49 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     fontWeight: '600',
   },
-  getStartedButton: {
-    backgroundColor: COLORS.accent,
-    paddingHorizontal: 40,
+  authButtonsContainer: {
+    width: '100%',
+    paddingHorizontal: 30,
+    gap: 12,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: 40,
     elevation: 3,
-    shadowColor: COLORS.accent,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.15,
     shadowRadius: 6,
+  },
+  socialIcon: {
+    marginRight: 10,
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+    shadowColor: '#000000',
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  googleButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600',
   },
   buttonDisabled: {
     opacity: 0.5,
     shadowOpacity: 0,
     elevation: 0,
-  },
-  buttonText: {
-    color: COLORS.background,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0,
-  },
-  buttonTextDisabled: {
-    color: COLORS.background,
   },
   modalOverlay: {
     flex: 1,

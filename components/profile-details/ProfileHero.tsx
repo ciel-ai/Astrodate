@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Dimensions } from 'react-native';
+import { useWindowDimensions, Dimensions } from 'react-native';
 
 interface ProfileHeroProps {
   name: string;
@@ -28,6 +28,9 @@ const ProfileHero = memo(function ProfileHero({
   onPhotoTap,
   compatibility = 87, // Mock default for now
 }: ProfileHeroProps) {
+  const { height: screenHeight } = useWindowDimensions();
+  const IMAGE_HEIGHT = screenHeight * 0.55;
+
   const router = useRouter();
 
   const images =
@@ -43,7 +46,7 @@ const ProfileHero = memo(function ProfileHero({
     <TouchableOpacity
       activeOpacity={1}
       onPress={onPhotoTap}
-      style={styles.imageContainer}
+      style={[styles.imageContainer, { height: IMAGE_HEIGHT }]}
     >
       <Image
         source={currentPhoto}
@@ -52,18 +55,7 @@ const ProfileHero = memo(function ProfileHero({
         transition={500}
       />
       
-      {/* Top Gradient for Down Arrow */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.5)', 'transparent']}
-        style={styles.topGradient}
-      >
-        <TouchableOpacity
-          style={styles.imageDownArrowIcon}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="chevron-down-circle" size={32} color="rgba(255,255,255,0.8)" />
-        </TouchableOpacity>
-      </LinearGradient>
+
 
       {/* Cosmic Match Pill */}
       <View style={styles.matchPillContainer}>
@@ -106,34 +98,18 @@ const ProfileHero = memo(function ProfileHero({
 
 export default ProfileHero;
 
-const IMAGE_HEIGHT = Dimensions.get('window').height * 0.55; // Slightly over 50% for gradient blend
-
 const styles = StyleSheet.create({
   imageContainer: {
     marginHorizontal: 0,
     borderRadius: 0,
     overflow: 'hidden',
-    height: IMAGE_HEIGHT,
     backgroundColor: '#0B0415',
   },
   profileImage: {
     width: '100%',
     height: '100%',
   },
-  topGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 100,
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    alignItems: 'flex-start',
-  },
-  imageDownArrowIcon: {
-    padding: 8,
-    marginLeft: -8,
-  },
+
   matchPillContainer: {
     position: 'absolute',
     bottom: 90,
