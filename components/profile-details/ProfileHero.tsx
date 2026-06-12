@@ -15,6 +15,7 @@ interface ProfileHeroProps {
   isSuperlikedByProfile?: boolean;
   currentImageIndex: number;
   onPhotoTap: () => void;
+  compatibility?: number; // New prop for Cosmic Match
 }
 
 const ProfileHero = memo(function ProfileHero({
@@ -25,6 +26,7 @@ const ProfileHero = memo(function ProfileHero({
   isSuperlikedByProfile = false,
   currentImageIndex,
   onPhotoTap,
+  compatibility = 87, // Mock default for now
 }: ProfileHeroProps) {
   const router = useRouter();
 
@@ -49,21 +51,46 @@ const ProfileHero = memo(function ProfileHero({
         contentFit="cover"
         transition={500}
       />
+      
+      {/* Top Gradient for Down Arrow */}
       <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.8)']}
+        colors={['rgba(0,0,0,0.5)', 'transparent']}
+        style={styles.topGradient}
+      >
+        <TouchableOpacity
+          style={styles.imageDownArrowIcon}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="chevron-down-circle" size={32} color="rgba(255,255,255,0.8)" />
+        </TouchableOpacity>
+      </LinearGradient>
+
+      {/* Cosmic Match Pill */}
+      <View style={styles.matchPillContainer}>
+        <LinearGradient
+          colors={['rgba(168, 85, 247, 0.8)', 'rgba(216, 180, 254, 0.8)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.matchPill}
+        >
+          <Ionicons name="sparkles" size={14} color="#FFFFFF" />
+          <Text style={styles.matchPillText}>{compatibility}% Cosmic Match</Text>
+        </LinearGradient>
+      </View>
+
+      <LinearGradient
+        colors={['transparent', 'rgba(11, 4, 21, 0.6)', '#0B0415']}
+        locations={[0, 0.6, 1]}
         style={styles.imageNameOverlay}
       >
         <View style={styles.imageNameBlock}>
           <View style={styles.imageNameHeaderRow}>
-            <Text style={styles.imageNameText}>
-              {name} {age || ''}
-            </Text>
-            <TouchableOpacity
-              style={styles.imageDownArrowIcon}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-down-circle" size={38} color="#FFFFFF" />
-            </TouchableOpacity>
+            <View style={styles.nameContainer}>
+              <Text style={styles.imageNameText}>
+                {name}{age ? `, ${age}` : ''}
+              </Text>
+              <Ionicons name="checkmark-circle" size={24} color="#A855F7" style={styles.verifiedIcon} />
+            </View>
           </View>
           {isSuperlikedByProfile && (
             <View style={styles.superlikedBadge}>
@@ -79,7 +106,7 @@ const ProfileHero = memo(function ProfileHero({
 
 export default ProfileHero;
 
-const IMAGE_HEIGHT = Dimensions.get('window').height * 0.55;
+const IMAGE_HEIGHT = Dimensions.get('window').height * 0.55; // Slightly over 50% for gradient blend
 
 const styles = StyleSheet.create({
   imageContainer: {
@@ -87,11 +114,44 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     overflow: 'hidden',
     height: IMAGE_HEIGHT,
-    backgroundColor: '#000000',
+    backgroundColor: '#0B0415',
   },
   profileImage: {
     width: '100%',
     height: '100%',
+  },
+  topGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    alignItems: 'flex-start',
+  },
+  imageDownArrowIcon: {
+    padding: 8,
+    marginLeft: -8,
+  },
+  matchPillContainer: {
+    position: 'absolute',
+    bottom: 90,
+    left: 20,
+    zIndex: 10,
+  },
+  matchPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  matchPillText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   imageNameOverlay: {
     position: 'absolute',
@@ -100,7 +160,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 20,
     paddingBottom: 20,
-    paddingTop: 60,
+    paddingTop: 80,
   },
   imageNameBlock: {
     gap: 8,
@@ -108,19 +168,24 @@ const styles = StyleSheet.create({
   imageNameHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  nameContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   imageNameText: {
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: -0.5,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
-  imageDownArrowIcon: {
-    padding: 2,
+  verifiedIcon: {
+    marginTop: 6,
   },
   superlikedBadge: {
     alignSelf: 'flex-start',

@@ -16,9 +16,14 @@ import { useSynastry } from '@/hooks/useSynastry';
 import ProfileHero from '@/components/profile-details/ProfileHero';
 import AstroBadges from '@/components/profile-details/AstroBadges';
 import InterestsSection from '@/components/profile-details/InterestsSection';
-import PersonalityTraits from '@/components/profile-details/PersonalityTraits';
 import CompatibilitySummary from '@/components/profile-details/CompatibilitySummary';
+import CosmicCompatibility from '@/components/profile-details/CosmicCompatibility';
+import EssentialsGrid from '@/components/profile-details/EssentialsGrid';
+import DeeperInsights from '@/components/profile-details/DeeperInsights';
+import AstrologyInsights from '@/components/profile-details/AstrologyInsights';
+import FloatingActionButtons from '@/components/profile-details/FloatingActionButtons';
 import SynastryBreakdown from '@/components/profile-details/SynastryBreakdown';
+import { getCompatibilitySubScores, getAstrologyInsights } from '@/lib/profile-mappers';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ActivityIndicator,
@@ -420,7 +425,7 @@ export default function ProfileDetailsScreen() {
   return (
     <ErrorBoundary>
       <LinearGradient
-        colors={['#1a0d2e', '#2d1b4e', '#4a2c5a']}
+        colors={['#0B0415', '#160B2A', '#1C0E35']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.gradientContainer}
@@ -470,63 +475,27 @@ export default function ProfileDetailsScreen() {
               moonSignAlignment={profile.moon_sign_alignment}
             />
 
-            {/* 3. Looking For & Relationship */}
-            {(profile.looking_for || profile.relationship_status) && (
-              <View style={styles.infoCard}>
-                <Text style={styles.sectionLabel}>Looking for</Text>
-                {profile.looking_for && (
-                  <View style={styles.lookingForContent}>
-                    <Text style={styles.lookingForEmoji}>
-                      {LOOKING_FOR_EMOJIS[profile.looking_for] || '💘'}
-                    </Text>
-                    <Text style={styles.lookingForText}>{profile.looking_for}</Text>
-                  </View>
-                )}
-                {profile.relationship_status && (
-                  <View style={{ marginTop: 15 }}>
-                    <Text
-                      style={[
-                        styles.sectionLabel,
-                        { fontSize: 16, marginBottom: 8, opacity: 0.8 },
-                      ]}
-                    >
-                      Relationship
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        marginBottom: 12,
-                      }}
-                    >
-                      <Ionicons
-                        name={
-                          profile.relationship_status.toLowerCase() === 'single'
-                            ? 'person-outline'
-                            : profile.relationship_status
-                                .toLowerCase()
-                                .includes('monogamy') ||
-                              profile.relationship_status
-                                .toLowerCase()
-                                .includes('relationship')
-                            ? 'heart-outline'
-                            : 'people-outline'
-                        }
-                        size={20}
-                        color="#FFFFFF"
-                        style={{ marginRight: 10 }}
-                      />
-                      <Text style={[styles.monogamyText, { fontSize: 18 }]}>
-                        {profile.relationship_status}
-                      </Text>
-                    </View>
-                    <View style={styles.separator} />
-                  </View>
-                )}
-              </View>
+            {/* 3. Cosmic Compatibility */}
+            {profile && (
+              <CosmicCompatibility
+                {...getCompatibilitySubScores(profile)}
+              />
             )}
 
-            {/* 4. Deep Synastry */}
+            {/* 4. Essentials Grid */}
+            <EssentialsGrid profile={profile} />
+
+            {/* 5. Deeper Insights */}
+            <DeeperInsights personalityDetail={profile.personality_detail} />
+
+            {/* 6. Astrology Insights */}
+            {profile && (
+              <AstrologyInsights
+                {...getAstrologyInsights(profile.western_sign)}
+              />
+            )}
+
+            {/* 7. Deep Synastry (Premium) */}
             <SynastryBreakdown
               detail={synastryDetail}
               isLoading={synastryLoading}
@@ -534,201 +503,29 @@ export default function ProfileDetailsScreen() {
               onUpgradePress={() => router.push('/subscription')}
             />
 
-            {/* 5. Compatibility scores */}
-            <CompatibilitySummary
-              indianScore={profile.indian_score}
-              westernScore={profile.western_score}
-              zodiacScore={zodiacScore}
-              finalScore={profile.final_score}
-              personalityScore={profile.personality_score}
-              westernReport={westernReport}
-            />
-
-            {/* 6. Essentials */}
-            <View style={styles.infoCard}>
-              <Text style={styles.sectionLabel}>Essentials</Text>
-              <View style={styles.essentialsList}>
-                {profile.compatibility !== undefined && (
-                  <>
-                    <View style={styles.essentialItem}>
-                      <Ionicons name="location-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.essentialText}>Nearby</Text>
-                    </View>
-                    <View style={styles.separator} />
-                  </>
-                )}
-                {profile.height && (
-                  <>
-                    <View style={styles.essentialItem}>
-                      <MaterialIcons name="straighten" size={20} color="#FFFFFF" />
-                      <Text style={styles.essentialText}>{profile.height} cm</Text>
-                    </View>
-                    <View style={styles.separator} />
-                  </>
-                )}
-                {profile.location && (
-                  <>
-                    <View style={styles.essentialItem}>
-                      <Ionicons name="home-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.essentialText}>
-                        Lives in {profile.location}
-                      </Text>
-                    </View>
-                    <View style={styles.separator} />
-                  </>
-                )}
-                {profile.gender && (
-                  <>
-                    <View style={styles.essentialItem}>
-                      <Ionicons name="person-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.essentialText}>{profile.gender}</Text>
-                    </View>
-                    <View style={styles.separator} />
-                  </>
-                )}
-                {profile.introvert_extrovert && (
-                  <>
-                    <View style={styles.essentialItem}>
-                      <Ionicons name="pulse-outline" size={20} color="#FFFFFF" />
-                      <Text style={styles.essentialText}>
-                        {profile.introvert_extrovert}
-                      </Text>
-                    </View>
-                    <View style={styles.separator} />
-                  </>
-                )}
-                {profile.partner_preference &&
-                  profile.partner_preference.length > 0 && (
-                    <>
-                      <View style={styles.essentialItem}>
-                        <Ionicons name="star-outline" size={20} color="#FFFFFF" />
-                        <Text style={styles.essentialText}>
-                          Prefer: {profile.partner_preference.join(', ')}
-                        </Text>
-                      </View>
-                      <View style={styles.separator} />
-                    </>
-                  )}
-              </View>
-            </View>
-
-            {/* 7. Lifestyle / Hobbies */}
-            {profile.hobbies && profile.hobbies.length > 0 && (
-              <View style={styles.infoCard}>
-                <Text style={styles.sectionLabel}>Lifestyle</Text>
-                <View style={styles.hobbiesList}>
-                  {profile.hobbies.map((hobby, index) => (
-                    <View key={index} style={styles.hobbyItem}>
-                      <Ionicons name="star-outline" size={18} color="#FFFFFF" />
-                      <Text style={styles.hobbyItemText}>{hobby}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
             {/* 8. Interests */}
             <InterestsSection
               interests={profile.interests}
               hobbies={profile.hobbies}
             />
-
-            {/* 9. Personality traits */}
-            <PersonalityTraits personalityDetail={profile.personality_detail} />
           </ScrollView>
 
           {/* Action buttons — only for feed/discover context */}
           {params.source !== 'likes' && params.source !== 'sent' && (
-            <View style={styles.actionIconsContainer}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.actionButtonSmallWrapper}
-                onPress={handleDislike}
-              >
-                <View style={styles.actionIconGlassy}>
-                  <BlurView
-                    intensity={25}
-                    tint="dark"
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <FontAwesome
-                    name="close"
-                    size={28}
-                    color="#FFFFFF"
-                    style={{ opacity: 0.8 }}
-                  />
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.actionButtonSmallWrapper}
-                onPress={handleSuperLike}
-              >
-                <View style={styles.actionIconGlassy}>
-                  <BlurView
-                    intensity={25}
-                    tint="dark"
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <Ionicons
-                    name="paper-plane"
-                    size={28}
-                    color="#FFFFFF"
-                    style={{ opacity: 0.8 }}
-                  />
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.actionButtonSmallWrapper}
-                onPress={handleLike}
-              >
-                <View style={styles.actionIconGlassy}>
-                  <BlurView
-                    intensity={25}
-                    tint="dark"
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <MaterialIcons
-                    name="favorite"
-                    size={28}
-                    color="#FFFFFF"
-                    style={{ opacity: 0.8 }}
-                  />
-                </View>
-              </TouchableOpacity>
-            </View>
+            <FloatingActionButtons
+              onPass={handleDislike}
+              onSuperLike={handleSuperLike}
+              onLike={handleLike}
+            />
           )}
 
           {/* Likes received: Pass or Like back */}
           {params.source === 'likes' && (
-            <View style={styles.actionIconsContainer}>
-              {/* Pass */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.actionButtonSmallWrapper}
-                onPress={handleDislike}
-              >
-                <View style={styles.actionIconGlassy}>
-                  <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-                  <FontAwesome name="close" size={28} color="#FFFFFF" style={{ opacity: 0.8 }} />
-                </View>
-              </TouchableOpacity>
-
-              {/* Like back */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                style={styles.actionButtonSmallWrapper}
-                onPress={handleLike}
-              >
-                <View style={[styles.actionIconGlassy, { backgroundColor: 'rgba(168, 85, 247, 0.35)' }]}>
-                  <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-                  <MaterialIcons name="favorite" size={28} color="#A855F7" style={{ opacity: 1 }} />
-                </View>
-              </TouchableOpacity>
-            </View>
+            <FloatingActionButtons
+              onPass={handleDislike}
+              onSuperLike={handleSuperLike} // Maybe hide superlike? Re-using for now.
+              onLike={handleLike}
+            />
           )}
 
           {/* Likes sent: only Withdraw (like Hinge's "Remove Like") */}
