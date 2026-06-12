@@ -71,6 +71,7 @@ export type Database = {
           birth_location: string;
           birth_latitude: number | null;
           birth_longitude: number | null;
+          birth_timezone: string | null;
           western_sign: string | null;
           indian_sign: string | null;
           nakshatra_name: string | null;
@@ -503,6 +504,8 @@ export type Database = {
           compatibility_summary: string | null;
           badges: Json | null;
           computed_at: string | null;
+          ashtakoota_score: number | null;
+          ashtakoota_detail: Json | null;
         }[];
       };
       get_active_astro_events: {
@@ -576,6 +579,14 @@ export type Database = {
       get_sign_compatibility: {
         Args: { sign_a: string; sign_b: string };
         Returns: number;
+      };
+      cancel_my_subscription: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      sync_ios_subscription: {
+        Args: { entitlement_id: string };
+        Returns: boolean;
       };
       get_astro_for_ranking: {
         Args: { p_user_id: string };

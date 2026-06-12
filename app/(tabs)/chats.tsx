@@ -535,7 +535,7 @@ export default function ChatsScreen() {
     // .on() error. We listen to the whole table and discard irrelevant rows instead.
     const userIdSet = new Set(userIds);
     const onlineChannel = supabase
-      .channel('online_status_bulk')
+      .channel(`online_status_bulk:${Date.now()}`)
       .on(
         'postgres_changes',
         {

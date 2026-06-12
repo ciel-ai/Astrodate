@@ -3,6 +3,7 @@ import { resendVerificationEmail } from '@/lib/email-auth';
 import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { deactivateCurrentDevicePushToken, syncNotificationPreferences } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
+import { useSubscriptionPayment } from '@/lib/useSubscriptionPayment';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,7 +29,9 @@ export default function SettingsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { membership, refetch: refetchMembership } = useSubscriptionStatus();
+  const { restorePurchases } = useSubscriptionPayment();
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   // ─── Email account state ────────────────────────────────────────────────────
@@ -727,23 +730,31 @@ export default function SettingsScreen() {
             <TouchableOpacity
               style={[styles.settingRow, styles.settingRowLast]}
               activeOpacity={0.7}
+              disabled={restoring}
               onPress={async () => {
+                setRestoring(true);
                 try {
-                  const { data, error } = await supabase.functions.invoke('razorpay-link-status', {});
-                  if (!error && data?.status === 'active') {
+                  const found = await restorePurchases();
+                  if (found) {
                     showAlert('Restored', 'Your subscription has been restored successfully.');
                   } else {
                     showAlert('Nothing to restore', 'No active subscription found for this account.');
                   }
-                } catch {
-                  showAlert('Error', 'Could not verify subscription. Please try again.');
+                } catch (e) {
+                  showAlert('Error', e instanceof Error ? e.message : 'Please try again.');
+                } finally {
+                  setRestoring(false);
                 }
               }}
             >
               <View style={styles.settingLeft}>
                 <MaterialIcons name="restore" size={24} color="#7C3AED" />
                 <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>Restore purchases</Text>
+                  {restoring ? (
+                    <ActivityIndicator size="small" color="#7C3AED" style={{ alignSelf: 'flex-start' }} />
+                  ) : (
+                    <Text style={styles.settingTitle}>Restore purchases</Text>
+                  )}
                   <Text style={styles.settingSubtitle}>Recover a previous subscription</Text>
                 </View>
               </View>

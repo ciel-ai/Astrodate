@@ -59,6 +59,14 @@ const HINTS: Hint[] = [
     toY: 0,
   },
   {
+    label: 'Swipe up to super like',
+    sublabel: 'Reserved for rare connections',
+    emoji: '⭐',
+    color: '#FCD34D',
+    toX: 0,
+    toY: -100,
+  },
+  {
     label: 'Tap to flip the card',
     sublabel: 'Discover their cosmic profile',
     emoji: '🔮',

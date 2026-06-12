@@ -32,7 +32,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Purchases, { PurchasesErrorCode } from 'react-native-purchases';
+import Purchases, { PURCHASES_ERROR_CODE } from 'react-native-purchases';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -222,7 +222,7 @@ export default function SubscriptionScreen() {
           Alert.alert('Error', 'Product not found on the App Store.');
         }
       } catch (error: any) {
-        if (error.code === PurchasesErrorCode.PURCHASE_CANCELLED_ERROR) {
+        if (error.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
           Alert.alert('Cancelled', 'Purchase was cancelled.');
         } else {
           Alert.alert('Error', error.message || 'An error occurred during purchase.');

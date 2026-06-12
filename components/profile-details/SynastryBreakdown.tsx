@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { derivedAstroScore, type SynastryDetail } from '@/lib/synastry';
+import { derivedAstroScore, type SynastryDetail, type AshtakootaDetail } from '@/lib/synastry';
 
 // ─── PlanetBar (internal) ─────────────────────────────────────────────────────
 interface PlanetBarProps {
@@ -134,6 +134,39 @@ function PlanetBar({ label, score, emoji, locked, teaserLabel }: PlanetBarProps)
   );
 }
 
+// ─── AshtakootaRow (internal) ─────────────────────────────────────────────────
+// Shows one of the 8 Vedic kootas as a compact row with a small fill bar.
+const KOOTA_META: Record<keyof Omit<AshtakootaDetail, 'total_points' | 'received_points'>, { label: string; emoji: string; maxPts: number }> = {
+  varna:   { label: 'Varna',   emoji: '🧬', maxPts: 1  },
+  vasya:   { label: 'Vasya',   emoji: '🤝', maxPts: 2  },
+  tara:    { label: 'Tara',    emoji: '⭐', maxPts: 3  },
+  yoni:    { label: 'Yoni',    emoji: '🌀', maxPts: 4  },
+  maitri:  { label: 'Maitri',  emoji: '💙', maxPts: 5  },
+  gan:     { label: 'Gana',    emoji: '🔥', maxPts: 6  },
+  bhakoot: { label: 'Bhakoot', emoji: '🌙', maxPts: 7  },
+  nadi:    { label: 'Nadi',    emoji: '💓', maxPts: 8  },
+};
+
+function AshtakootaRow({ kootaKey, score }: { kootaKey: string; score: { received_points: number; total_points: number } }) {
+  const meta = KOOTA_META[kootaKey as keyof typeof KOOTA_META];
+  if (!meta) return null;
+  const pct = (score.received_points / meta.maxPts) * 100;
+  const color = pct >= 70 ? '#34d399' : pct >= 40 ? '#f59e0b' : '#ef4444';
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+      <Text style={{ fontSize: 14, width: 22 }}>{meta.emoji}</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, width: 56 }}>{meta.label}</Text>
+      <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+        <View style={{ width: `${pct}%`, height: '100%', borderRadius: 2, backgroundColor: color }} />
+      </View>
+      <Text style={{ color, fontSize: 12, fontWeight: '700', width: 36, textAlign: 'right' }}>
+        {score.received_points}/{meta.maxPts}
+      </Text>
+    </View>
+  );
+}
+
 // ─── SynastryBreakdown ────────────────────────────────────────────────────────
 interface SynastryBreakdownProps {
   detail: SynastryDetail | null;
@@ -165,6 +198,8 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
 
   const compositeScore = derivedAstroScore(detail);
 
+  // Teaser labels shown on locked bars so non-premium users get a hint of
+  // what's behind the paywall without seeing the real number.
   const teaserLabels: Record<string, string> = {
     venus_score:
       detail.venus_score >= 7
@@ -186,9 +221,13 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
         : 'Different Styles',
   };
 
+  // Build the Ashtakoota koota list from detail if available
+  const hasAshtakoota = isPremium && detail.ashtakoota_detail != null && detail.ashtakoota_score != null;
+  const kootaKeys = ['varna', 'vasya', 'tara', 'yoni', 'maitri', 'gan', 'bhakoot', 'nadi'] as const;
+
   return (
     <View style={{ marginHorizontal: 16, marginTop: 20 }}>
-      {/* Section header */}
+      {/* ── Section header with composite score ring ── */}
       <View
         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
       >
@@ -223,6 +262,7 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
         </View>
       </View>
 
+      {/* ── Compatibility summary text ── */}
       {detail.compatibility_summary ? (
         <Text
           style={{
@@ -236,6 +276,7 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
         </Text>
       ) : null}
 
+      {/* ── Compatibility badges ── */}
       {detail.badges && detail.badges.length > 0 && (
         <View
           style={{
@@ -265,18 +306,12 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
         </View>
       )}
 
-      <PlanetBar
-        label="Sun"
-        emoji="☀️"
-        score={detail.sun_score}
-        locked={false}
-      />
-      <PlanetBar
-        label="Moon"
-        emoji="🌙"
-        score={detail.moon_score}
-        locked={false}
-      />
+      {/* ── Western planet bars ── */}
+      {/* Sun & Moon: always visible to everyone */}
+      <PlanetBar label="Sun"  emoji="☀️" score={detail.sun_score}  locked={false} />
+      <PlanetBar label="Moon" emoji="🌙" score={detail.moon_score} locked={false} />
+
+      {/* Venus, Mars, Mercury: AstroX only */}
       <PlanetBar
         label="Venus"
         emoji="💕"
@@ -299,9 +334,10 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
         teaserLabel={teaserLabels.mercury_score}
       />
 
+      {/* ── Dominant element match ── */}
       {detail.dominant_element_match && (
         <View
-          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
+          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 4 }}
         >
           <Text style={{ fontSize: 14, marginRight: 6 }}>🌿</Text>
           <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
@@ -320,6 +356,84 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
         </View>
       )}
 
+      {/* ── Vedic Ashtakoota section (AstroX only, shown when data is ready) ── */}
+      {isPremium && (
+        <View style={{ marginTop: 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16, flex: 1 }}>
+              🪔 Vedic Ashtakoota
+            </Text>
+            {detail.ashtakoota_score != null ? (
+              <View style={{
+                backgroundColor: 'rgba(139,92,246,0.2)',
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: 'rgba(139,92,246,0.5)',
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}>
+                <Text style={{ color: '#c4b5fd', fontWeight: '800', fontSize: 14 }}>
+                  {detail.ashtakoota_score} / 36
+                </Text>
+              </View>
+            ) : (
+              <View style={{
+                backgroundColor: 'rgba(100,100,100,0.2)',
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.1)',
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}>
+                <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Computing…</Text>
+              </View>
+            )}
+          </View>
+
+          {hasAshtakoota ? (
+            <>
+              {kootaKeys.map((key) => {
+                const kootaScore = (detail.ashtakoota_detail as any)?.[key];
+                if (!kootaScore) return null;
+                return <AshtakootaRow key={key} kootaKey={key} score={kootaScore} />;
+              })}
+              {/* Ashtakoota interpretation */}
+              <View style={{
+                marginTop: 12,
+                padding: 12,
+                borderRadius: 12,
+                backgroundColor: 'rgba(139,92,246,0.1)',
+                borderWidth: 1,
+                borderColor: 'rgba(139,92,246,0.25)',
+              }}>
+                <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12, lineHeight: 18 }}>
+                  {detail.ashtakoota_score! >= 28
+                    ? '✦ Exceptional match — 28+ gunas indicates deep harmony, highly auspicious for a long-term relationship.'
+                    : detail.ashtakoota_score! >= 18
+                    ? '✦ Good compatibility — 18+ gunas is the traditional threshold for a balanced, compatible match.'
+                    : '✦ Some differences exist — compatibility can still be built with understanding and effort.'}
+                </Text>
+              </View>
+            </>
+          ) : detail.ashtakoota_score == null ? (
+            // Still computing — show placeholder rows
+            <View style={{ opacity: 0.4 }}>
+              {kootaKeys.map((key) => (
+                <View key={key} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                  <View style={{ width: 22, height: 14, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                  <View style={{ width: 56, height: 10, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                  <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                </View>
+              ))}
+              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 4, textAlign: 'center' }}>
+                Vedic chart analysis in progress — check back shortly
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      )}
+
+      {/* ── Upgrade card — shown only to non-premium users ── */}
       {!isPremium && (
         <TouchableOpacity
           onPress={onUpgradePress}
@@ -332,7 +446,7 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
           }}
         >
           <LinearGradient
-            colors={['rgba(139,92,246,0.15)', 'rgba(236,72,153,0.12)']}
+            colors={['rgba(139,92,246,0.15)', 'rgba(96,165,250,0.12)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={{ padding: 14 }}
@@ -345,34 +459,38 @@ const SynastryBreakdown = memo(function SynastryBreakdown({
                 marginBottom: 4,
               }}
             >
-              🔒 Your Venus signs show intense passion, but there's a catch…
+              🔒 Venus, Mars & Mercury scores are hidden
             </Text>
             <Text
               style={{
                 color: 'rgba(255,255,255,0.6)',
                 fontSize: 12,
                 lineHeight: 17,
+                marginBottom: 4,
               }}
             >
-              Upgrade to reveal your full Deep Synastry — Venus, Mars, and
-              Mercury tell the real story of romantic chemistry and
-              communication style.
+              Upgrade to AstroX to reveal the full Deep Synastry — including
+              Venus (romance), Mars (drive), Mercury (communication) and the
+              complete 36-guna Vedic Ashtakoota score.
             </Text>
             <View
               style={{
                 marginTop: 10,
                 alignSelf: 'flex-start',
-                backgroundColor: '#8b5cf6',
                 borderRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 6,
+                overflow: 'hidden',
               }}
             >
-              <Text
-                style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}
+              <LinearGradient
+                colors={['#3B82F6', '#1D4ED8']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}
               >
-                Unlock Deep Synastry ✨
-              </Text>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
+                  Unlock with AstroX ✦
+                </Text>
+              </LinearGradient>
             </View>
           </LinearGradient>
         </TouchableOpacity>

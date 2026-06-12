@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import LottieView from 'lottie-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type LikeProfile = {
@@ -44,6 +44,58 @@ export default function LikesScreen() {
 
   // Stars are defined at module level as STAR_DATA — no useMemo needed
   const stars = STAR_DATA;
+
+  const handleLongPress = useCallback((like: LikeProfile) => {
+    const options = ['Cancel', 'Report', 'Block User'];
+    const destructiveButtonIndex = 2;
+    const cancelButtonIndex = 0;
+
+    const onSelectOption = async (index: number) => {
+      if (index === 1) {
+        Alert.alert('Report', `Report ${like.name}?`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Report', onPress: () => Alert.alert('Reported', 'User has been reported.') }
+        ]);
+      } else if (index === 2) {
+        Alert.alert(
+          'Block User',
+          `Are you sure you want to block ${like.name}?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Block',
+              style: 'destructive',
+              onPress: async () => {
+                const { blockUser } = await import('@/lib/blocks');
+                const result = await blockUser(like.id);
+                if (result.success) {
+                  setLikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  setSuperlikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  setLikesSentData((prev) => prev.filter((p) => p.id !== like.id));
+                  Alert.alert('Blocked', `${like.name} has been blocked.`);
+                } else {
+                  Alert.alert('Error', result.error ?? 'Could not block user. Try again.');
+                }
+              },
+            },
+          ]
+        );
+      }
+    };
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex, destructiveButtonIndex },
+        onSelectOption
+      );
+    } else {
+      Alert.alert('Options', 'Choose an action', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Report', onPress: () => onSelectOption(1) },
+        { text: 'Block User', style: 'destructive', onPress: () => onSelectOption(2) },
+      ]);
+    }
+  }, []);
 
   // Format time ago
   const formatTimeAgo = (dateString: string): string => {
@@ -481,6 +533,7 @@ export default function LikesScreen() {
                             params: { userId: like.id, source: 'likes' },
                           });
                         }}
+                        onLongPress={() => handleLongPress(like)}
                         activeOpacity={0.9}
                       >
                         <View style={styles.imageContainer}>
@@ -561,6 +614,7 @@ export default function LikesScreen() {
                             params: { userId: like.id, source: 'likes' },
                           });
                         }}
+                        onLongPress={() => handleLongPress(like)}
                         activeOpacity={0.9}
                       >
                         <View style={styles.imageContainer}>
@@ -645,6 +699,7 @@ export default function LikesScreen() {
                             params: { userId: like.id, source: 'sent' },
                           });
                         }}
+                        onLongPress={() => handleLongPress(like)}
                         activeOpacity={0.9}
                       >
                         <View style={styles.imageContainer}>

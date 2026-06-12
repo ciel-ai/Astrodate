@@ -997,14 +997,11 @@ export default function ProfileScreen() {
             </Text>
             {membership?.is_active && (() => {
               const planSlug = String(membership?.plan_slug || '').toLowerCase();
-              let tickColor = '#3B82F6';
-
-              if (planSlug.includes('annual') || planSlug.includes('cosmic')) {
-                tickColor = '#D1D5DB';
-              } else if (planSlug.includes('lifetime') || planSlug.includes('galaxy')) {
-                tickColor = '#F4D35E';
-              } else if (planSlug.includes('monthly') || planSlug.includes('stellar')) {
-                tickColor = '#3B82F6';
+              let tickColor = '#94A3B8'; // default grey for free
+              if (planSlug === 'astro_x') {
+                tickColor = '#60A5FA'; // blue for AstroX
+              } else if (planSlug === 'astro_plus') {
+                tickColor = '#A855F7'; // purple for Astro+
               }
 
               return (
@@ -1206,7 +1203,7 @@ export default function ProfileScreen() {
 
             <View style={styles.subscriptionCards}>
               {planCatalog.map((plan, idx) => {
-                const isHighlighted = plan.plan_slug === 'cosmic-annual';
+                const isHighlighted = plan.plan_slug === 'astro_x';
                 const priceRupees = (plan.amount_paise / 100).toLocaleString('en-IN');
                 const intervalLabel =
                   plan.interval === 'monthly' ? '/ month' :

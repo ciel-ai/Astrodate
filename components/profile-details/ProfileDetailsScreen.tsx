@@ -19,7 +19,7 @@ import InterestsSection from '@/components/profile-details/InterestsSection';
 import PersonalityTraits from '@/components/profile-details/PersonalityTraits';
 import CompatibilitySummary from '@/components/profile-details/CompatibilitySummary';
 import SynastryBreakdown from '@/components/profile-details/SynastryBreakdown';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -41,7 +41,11 @@ import type { Profile } from '@/types/profile';
 
 export default function ProfileDetailsScreen() {
   const { membership } = useSubscriptionStatus();
-  const isPremiumUser = membership?.features?.deep_synastry === true;
+  // AstroX tier unlocks full synastry (Venus / Mars / Mercury planet bars).
+  // Feature key must match plan_catalog.features JSON key exactly.
+  const isPremiumUser =
+    membership?.features?.full_synastry_report === true ||
+    membership?.plan_slug === 'astro_x';
   const router = useRouter();
   const navigation = useNavigation();
   const params = useProfileRouteParams();
@@ -70,13 +74,20 @@ export default function ProfileDetailsScreen() {
   // Prefer fetched data; fall back to initial data while loading
   const profile = fetchedProfile ?? initialProfile;
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [westernReport, setWesternReport] = useState<string | undefined>(undefined);
   const [zodiacScore, setZodiacScore] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      setCurrentUserId(data?.user?.id ?? null);
+      if (isMountedRef.current) setCurrentUserId(data?.user?.id ?? null);
     });
   }, []);
 
@@ -94,11 +105,19 @@ export default function ProfileDetailsScreen() {
           .select('western_sign')
           .eq('user_id', currentUserId)
           .maybeSingle();
-        if (cancelled || !myAstro?.western_sign) return;
-        const result = await getZodiacCompatibility(myAstro.western_sign, profile.western_sign as string);
-        if (!cancelled && result) {
-          if (result.compatibility_report) setWesternReport(result.compatibility_report);
-          if (result.compatibility_percentage != null) setZodiacScore(result.compatibility_percentage);
+        if (cancelled) return;
+        if (myAstro?.western_sign && profile.western_sign) {
+          const result = await getZodiacCompatibility(
+            myAstro.western_sign,
+            profile.western_sign as string,
+          );
+          if (cancelled) return;
+          if (result) {
+            if (isMountedRef.current) {
+              if (result.compatibility_report) setWesternReport(result.compatibility_report);
+              if (result.compatibility_percentage != null) setZodiacScore(result.compatibility_percentage);
+            }
+          }
         }
       } catch { /* non-fatal */ }
     })();
@@ -124,7 +143,7 @@ export default function ProfileDetailsScreen() {
             photosResult.data.find((p: any) => p.is_primary) ||
             photosResult.data[0];
           if (primary?.photo_url) {
-            setCurrentUserPhoto({ uri: primary.photo_url });
+            if (isMountedRef.current) setCurrentUserPhoto({ uri: primary.photo_url });
           }
         }
       } catch {
@@ -232,9 +251,11 @@ export default function ProfileDetailsScreen() {
       const result = await checkMutualLike(likedUserId);
       if (result.isMatch) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setMatchedProfile(profile);
-        setMatchedUserId(String(likedUserId));
-        setShowMatchModal(true);
+        if (isMountedRef.current) {
+          setMatchedProfile(profile);
+          setMatchedUserId(String(likedUserId));
+          setShowMatchModal(true);
+        }
         return true;
       }
       return false;
@@ -510,7 +531,7 @@ export default function ProfileDetailsScreen() {
               detail={synastryDetail}
               isLoading={synastryLoading}
               isPremium={isPremiumUser}
-              onUpgradePress={() => router.push('/settings')}
+              onUpgradePress={() => router.push('/subscription')}
             />
 
             {/* 5. Compatibility scores */}
