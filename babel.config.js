@@ -8,7 +8,7 @@ module.exports = function (api) {
         plugins: [
             // Strip all console.log/warn/error calls in production builds.
             // Has zero effect on development — logs still appear normally.
-            ...(isProduction ? [['transform-remove-console', { exclude: [] }]] : []),
+            ...(isProduction ? [['transform-remove-console', { exclude: ['error', 'warn'] }]] : []),
         ],
     };
 };

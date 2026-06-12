@@ -34,10 +34,14 @@ const POLL_INTERVALS_MS = [3_000, 6_000, 12_000, 20_000, 30_000];
 
 let revenueCatConfigured = false;
 
-export function ensureRevenueCatConfigured() {
+export async function ensureRevenueCatConfigured() {
   if (revenueCatConfigured) return;
   if (!REVENUECAT_API_KEY_IOS) {
     throw new Error('RevenueCat iOS API key is missing.');
+  }
+  if (Platform.OS === 'ios') {
+    const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');
+    await requestTrackingPermissionsAsync();
   }
   Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS });
   revenueCatConfigured = true;
@@ -233,7 +237,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
             throw new Error('This subscription plan is not available for iOS purchases yet.');
           }
 
-          ensureRevenueCatConfigured();
+          await ensureRevenueCatConfigured();
           const productId = REVENUECAT_PRODUCT_IDS[planSlug];
           const offerings = await Purchases.getOfferings();
           const allPackages = Object.values(offerings.all).flatMap((offering) => offering.availablePackages);
@@ -271,29 +275,31 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
         return;
       }
 
-      try {
-        if (isMountedRef.current) setPaymentStatus('creating');
-        const { paymentLinkId, shortUrl } = await createRazorpayPaymentLink(options);
-        activePaymentLinkIdRef.current = paymentLinkId;
+      if (Platform.OS === 'android') {
+        try {
+          if (isMountedRef.current) setPaymentStatus('creating');
+          const { paymentLinkId, shortUrl } = await createRazorpayPaymentLink(options);
+          activePaymentLinkIdRef.current = paymentLinkId;
 
-        const userId = options.userId;
-        if (!userId) throw new Error('userId is required for subscription verification');
-        startVerification(paymentLinkId, userId);
+          const userId = options.userId;
+          if (!userId) throw new Error('userId is required for subscription verification');
+          startVerification(paymentLinkId, userId);
 
-        if (isMountedRef.current) setPaymentStatus('browser');
-        await openRazorpayPaymentLink(shortUrl);
+          if (isMountedRef.current) setPaymentStatus('browser');
+          await openRazorpayPaymentLink(shortUrl);
 
-        if (isMountedRef.current && paymentStatus !== 'active') {
-          setPaymentStatus('pending');
+          if (isMountedRef.current && paymentStatus !== 'active') {
+            setPaymentStatus('pending');
+          }
+        } catch (error) {
+          const message = getErrorMessage(error);
+          console.error('[useSubscriptionPayment] startPayment error:', error);
+          if (isMountedRef.current) {
+            setPaymentStatus('failed');
+            setPaymentError(message);
+          }
+          stopPollingAndChannel();
         }
-      } catch (error) {
-        const message = getErrorMessage(error);
-        console.error('[useSubscriptionPayment] startPayment error:', error);
-        if (isMountedRef.current) {
-          setPaymentStatus('failed');
-          setPaymentError(message);
-        }
-        stopPollingAndChannel();
       }
     },
     [paymentStatus, startVerification, stopPollingAndChannel]
@@ -301,7 +307,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
 
   const restorePurchases = useCallback(async () => {
     if (Platform.OS === 'ios') {
-      ensureRevenueCatConfigured();
+      await ensureRevenueCatConfigured();
       const customerInfo = await Purchases.restorePurchases();
       const activeEntitlements = Object.keys(customerInfo.entitlements.active);
       if (activeEntitlements.length > 0) {

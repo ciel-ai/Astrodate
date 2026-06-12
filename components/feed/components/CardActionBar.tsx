@@ -57,6 +57,9 @@ export function CardActionBar({
           style={styles.actionButtonSmallWrapper}
           onPress={onDislike}
           disabled={isTransitioning}
+          accessibilityLabel="Pass"
+          accessibilityRole="button"
+          accessibilityHint="Skip this profile"
         >
           <Animated.View style={[styles.actionIconGlassy, dislikeButtonScale, dislikeButtonColorStyle]}>
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
@@ -70,6 +73,9 @@ export function CardActionBar({
           style={styles.actionButtonSmallWrapper}
           onPress={onSuperLike}
           disabled={isTransitioning}
+          accessibilityLabel="Super Like"
+          accessibilityRole="button"
+          accessibilityHint="Send a super like to this profile"
         >
           <Animated.View style={[styles.actionIconGlassy, superLikeButtonScale, superLikeButtonColorStyle]}>
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
@@ -88,6 +94,9 @@ export function CardActionBar({
           style={styles.actionButtonSmallWrapper}
           onPress={onLike}
           disabled={isTransitioning}
+          accessibilityLabel="Like"
+          accessibilityRole="button"
+          accessibilityHint="Like this profile"
         >
           <Animated.View style={[styles.actionIconGlassy, likeButtonScale, likeButtonColorStyle]}>
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />

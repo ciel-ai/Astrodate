@@ -55,7 +55,7 @@ export default function DeleteAccountScreen() {
         style={styles.container}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7} accessibilityLabel="Go back" accessibilityRole="button">
             <MaterialIcons name="arrow-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Delete Account</Text>
@@ -76,6 +76,8 @@ export default function DeleteAccountScreen() {
             onPress={handleDelete}
             disabled={loading}
             activeOpacity={0.8}
+            accessibilityLabel="Permanently delete my account"
+            accessibilityRole="button"
           >
             {loading ? (
               <ActivityIndicator color="#FFF" />

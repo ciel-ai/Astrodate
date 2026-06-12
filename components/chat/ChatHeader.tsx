@@ -57,7 +57,9 @@ export function ChatHeader({ user, isOtherUserTyping, connectionStatus, onBackPr
       <View style={styles.header}>
         {/* Back */}
         <TouchableOpacity style={styles.backButton} onPress={onBackPress} activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Go back"
+          accessibilityRole="button">
           <MaterialIcons name="arrow-back-ios" size={20} color="#FFFFFF" />
         </TouchableOpacity>
 

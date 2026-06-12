@@ -1,4 +1,5 @@
 import { GlobalAuthAlertModal } from '@/components/global-auth-alert-modal';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthAlertProvider } from '@/lib/auth-alert-context';
 import { SubscriptionProvider } from '@/hooks/useSubscriptionStatus';
@@ -369,62 +370,67 @@ export default function RootLayout() {
   // Stack is ALWAYS rendered so the navigator is ready before finishBoot fires.
   // Spinner is an absolute overlay that disappears once isReady=true.
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthAlertProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack
-            screenOptions={{
-              contentStyle: {
-                backgroundColor: Platform.OS === 'android' ? '#1A0B2E' : undefined,
-              },
-            }}>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/login" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/onboarding_ques" options={{ headerShown: false }} />
-            <Stack.Screen name="profile-details/index" options={{ headerShown: false, animation: 'fade', gestureEnabled: true }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="onboarding/signup" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/otp-verify" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/welcome" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/basic-details" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/birth-details" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/photo_upload" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/zodiac-preview" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/congratulations" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/phone-verification" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/email-signup" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/email-login" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding/email-verify-pending" options={{ headerShown: false }} />
-            <Stack.Screen name="auth/verify" options={{ headerShown: false }} />
-            <Stack.Screen name="chat/[id]/index" options={{ headerShown: false, animation: 'slide_from_right' }} />
-            <Stack.Screen name="chatbot" options={{ headerShown: false }} />
-            <Stack.Screen name="filters" options={{ headerShown: false }} />
-            <Stack.Screen name="settings" options={{ headerShown: false }} />
-            <Stack.Screen name="help" options={{ headerShown: false }} />
-            <Stack.Screen name="cosmic-insights" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="privacy" options={{ headerShown: false }} />
-            <Stack.Screen name="terms" options={{ headerShown: false }} />
-          </Stack>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AuthAlertProvider>
+        <SubscriptionProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack
+              screenOptions={{
+                contentStyle: {
+                  backgroundColor: Platform.OS === 'android' ? '#1A0B2E' : undefined,
+                },
+              }}>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/login" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/onboarding_ques" options={{ headerShown: false }} />
+              <Stack.Screen name="profile-details/index" options={{ headerShown: false, animation: 'fade', gestureEnabled: true }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              <Stack.Screen name="onboarding/signup" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/otp-verify" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/welcome" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/basic-details" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/birth-details" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/photo_upload" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/zodiac-preview" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/congratulations" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/phone-verification" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/email-signup" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/email-login" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding/email-verify-pending" options={{ headerShown: false }} />
+              <Stack.Screen name="auth/verify" options={{ headerShown: false }} />
+              <Stack.Screen name="chat/[id]/index" options={{ headerShown: false, animation: 'slide_from_right' }} />
+              <Stack.Screen name="chatbot" options={{ headerShown: false }} />
+              <Stack.Screen name="filters" options={{ headerShown: false }} />
+              <Stack.Screen name="settings" options={{ headerShown: false }} />
+              <Stack.Screen name="help" options={{ headerShown: false }} />
+              <Stack.Screen name="cosmic-insights" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+              <Stack.Screen name="privacy" options={{ headerShown: false }} />
+              <Stack.Screen name="terms" options={{ headerShown: false }} />
+              <Stack.Screen name="subscription" options={{ headerShown: false }} />
+            </Stack>
 
-          {/* Global alert modal — survives all navigation */}
-          <GlobalAuthAlertModal />
+            {/* Global alert modal — survives all navigation */}
+            <GlobalAuthAlertModal />
 
-          {/* Boot spinner overlay — removed once isReady=true */}
-          {!isReady && (
-            <View style={styles.spinnerOverlay} pointerEvents="none">
-              <ActivityIndicator size="large" color="#A855F7" />
-            </View>
-          )}
+            {/* Boot spinner overlay — removed once isReady=true */}
+            {!isReady && (
+              <View style={styles.spinnerOverlay} pointerEvents="none">
+                <ActivityIndicator size="large" color="#A855F7" />
+              </View>
+            )}
 
-          <StatusBar
-            style="auto"
-            translucent={false}
-            backgroundColor={Platform.OS === 'android' ? '#1A0B2E' : undefined}
-          />
-        </ThemeProvider>
+            <StatusBar
+              style="auto"
+              translucent={false}
+              backgroundColor={Platform.OS === 'android' ? '#1A0B2E' : undefined}
+            />
+          </ThemeProvider>
+        </SubscriptionProvider>
       </AuthAlertProvider>
     </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 
