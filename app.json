@@ -124,13 +124,6 @@
         "projectId": "0316ec04-75d5-4ab8-ab58-ac9f33069d28"
       }
     },
-    // "updates": {
-    //   "url": "https://u.expo.dev/0316ec04-75d5-4ab8-ab58-ac9f33069d28",
-    //   "fallbackToCacheTimeout": 0
-    // },
-    // "runtimeVersion": {
-    //   "policy": "appVersion"
-    // },
     "owner": "ciel.ai"
   }
 }

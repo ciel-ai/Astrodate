@@ -143,7 +143,7 @@ type LivePlan = {
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { membership, refetch } = useSubscriptionStatus();
-  const { paymentStatus, paymentError, startPayment, resetPayment } = useSubscriptionPayment();
+  const { paymentStatus, paymentError, startPayment, resetPayment, restorePurchases } = useSubscriptionPayment();
 
   const [livePlans, setLivePlans]     = useState<LivePlan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
@@ -414,15 +414,32 @@ export default function SubscriptionScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            {Platform.OS === 'ios'
-              ? 'Subscriptions managed by Apple. Cancel anytime in iOS Settings → Apple ID → Subscriptions.'
-              : 'Payments secured by Razorpay. Cancel anytime from Settings → Subscription.'}
-          </Text>
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity onPress={() => Linking.openURL('itms-apps://apps.apple.com/account/subscriptions')}>
-              <Text style={styles.footerLink}>Manage subscription in iOS Settings ↗</Text>
-            </TouchableOpacity>
+          {Platform.OS === 'ios' ? (
+            <>
+              <Text style={styles.footerText}>
+                Subscriptions managed by Apple. Cancel anytime in iOS Settings → [Your Name] → Subscriptions.
+              </Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  const ok = await restorePurchases();
+                  if (ok) {
+                    Alert.alert('Restored', 'Your purchases have been restored.');
+                  } else {
+                    Alert.alert('Nothing to Restore', 'No previous purchases were found for this Apple ID.');
+                  }
+                }}
+                style={styles.restoreButton}
+              >
+                <Text style={styles.footerLink}>Restore Purchases</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => Linking.openURL('itms-apps://apps.apple.com/account/subscriptions')}>
+                <Text style={styles.footerLink}>Manage subscription in iOS Settings ↗</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={styles.footerText}>
+              Payments secured by Razorpay. Cancel anytime from Settings → Subscription.
+            </Text>
           )}
           <TouchableOpacity onPress={() => Linking.openURL('https://astrodate.in/terms')}>
             <Text style={styles.footerLink}>Terms of Service</Text>
@@ -712,5 +729,8 @@ const styles = StyleSheet.create({
     color: 'rgba(168,85,247,0.6)',
     fontSize: 12,
     textDecorationLine: 'underline',
+  },
+  restoreButton: {
+    marginTop: 4,
   },
 });

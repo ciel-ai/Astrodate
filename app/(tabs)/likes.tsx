@@ -52,10 +52,55 @@ export default function LikesScreen() {
 
     const onSelectOption = async (index: number) => {
       if (index === 1) {
-        Alert.alert('Report', `Report ${like.name}?`, [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Report', onPress: () => Alert.alert('Reported', 'User has been reported.') }
-        ]);
+        Alert.alert(
+          `Report ${like.name}`,
+          'Why are you reporting this profile?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Fake or spam profile',
+              onPress: async () => {
+                const { createReport } = await import('@/lib/reports');
+                const result = await createReport(like.id, 'Something on their profile', 'Fake or spam');
+                if (result.success) {
+                  setLikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  setSuperlikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  Alert.alert('Report Submitted', 'Thank you. We will review this profile.');
+                } else {
+                  Alert.alert('Error', 'Could not submit report. Please try again.');
+                }
+              },
+            },
+            {
+              text: 'Inappropriate photos',
+              onPress: async () => {
+                const { createReport } = await import('@/lib/reports');
+                const result = await createReport(like.id, 'Something on their profile', 'Photos or videos');
+                if (result.success) {
+                  setLikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  setSuperlikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  Alert.alert('Report Submitted', 'Thank you. We will review this profile.');
+                } else {
+                  Alert.alert('Error', 'Could not submit report. Please try again.');
+                }
+              },
+            },
+            {
+              text: 'Other reason',
+              onPress: async () => {
+                const { createReport } = await import('@/lib/reports');
+                const result = await createReport(like.id, 'Something on their profile', 'Other');
+                if (result.success) {
+                  setLikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  setSuperlikesData((prev) => prev.filter((p) => p.id !== like.id));
+                  Alert.alert('Report Submitted', 'Thank you. We will review this profile.');
+                } else {
+                  Alert.alert('Error', 'Could not submit report. Please try again.');
+                }
+              },
+            },
+          ]
+        );
       } else if (index === 2) {
         Alert.alert(
           'Block User',

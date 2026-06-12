@@ -25,7 +25,7 @@ This Policy is compliant with the Digital Personal Data Protection Act, 2023 (DP
 
 By using AstroDate, you ("Data Principal") consent to the collection and processing of your personal data as described in this Policy. If you do not agree, please discontinue use of the application.
 
-Last updated: June 2025. Effective date: June 2025.`,
+Last updated: June 2026. Effective date: June 2026.`,
   },
   {
     id: 'collect',
@@ -107,6 +107,11 @@ Google Gemini (AI Icebreaker)
 • AstroDate uses Google Gemini AI to generate personalised conversation starters based on two users' astrological profiles
 • Only anonymised astrological attributes (signs, elements, compatibility notes) are sent — no names, photos, or identifying information
 • Gemini outputs are not used to train any model on your data
+
+Google Gemini (Photo Verification)
+• Profile photos you upload during onboarding are sent to a Supabase Edge Function which uses the Google Gemini Vision API to verify that the photo contains a real human face
+• The photo is processed in real time for verification purposes only and is not stored by Google or used for any other purpose
+• This processing occurs server-side; your photo is transmitted over an encrypted connection
 
 You may request deletion of all computed astrological data by deleting your account (Settings → Delete Account).`,
   },
@@ -306,7 +311,7 @@ export default function PrivacyPolicyScreen() {
             </View>
             <View style={styles.heroBadge}>
               <MaterialIcons name="schedule" size={11} color="#9b72d4" />
-              <Text style={styles.heroBadgeText}>Updated June 2025</Text>
+              <Text style={styles.heroBadgeText}>Updated June 2026</Text>
             </View>
           </View>
         </View>
