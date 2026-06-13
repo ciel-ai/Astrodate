@@ -32,10 +32,10 @@ export interface UseSubscriptionPaymentReturn {
 
 const POLL_INTERVALS_MS = [3_000, 6_000, 12_000, 20_000, 30_000];
 
-let revenueCatConfigured = false;
+let _rcConfigured = false;
 
 export async function ensureRevenueCatConfigured() {
-  if (revenueCatConfigured) return;
+  if (_rcConfigured) return; // prevent duplicate init
   if (!REVENUECAT_API_KEY_IOS) {
     throw new Error('RevenueCat iOS API key is missing.');
   }
@@ -44,7 +44,7 @@ export async function ensureRevenueCatConfigured() {
     await requestTrackingPermissionsAsync();
   }
   Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS });
-  revenueCatConfigured = true;
+  _rcConfigured = true;
 }
 
 function getRevenueCatPlanSlug(options: StartPaymentOptions): RevenueCatPlanSlug | null {

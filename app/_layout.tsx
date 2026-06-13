@@ -3,6 +3,8 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthAlertProvider } from '@/lib/auth-alert-context';
 import { SubscriptionProvider } from '@/hooks/useSubscriptionStatus';
+import { ensureRevenueCatConfigured } from '@/lib/useSubscriptionPayment';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import type { Tables } from '@/lib/database.types';
 import { cleanupOldMessages } from '@/lib/messages';
 import { drainPendingPushNotifications, setupNotificationListeners, syncPushTokenForCurrentUser } from '@/lib/notifications';
@@ -129,6 +131,12 @@ export default function RootLayout() {
 
     const bootstrap = async () => {
       try {
+        if (Platform.OS === 'ios') {
+          const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');
+          await requestTrackingPermissionsAsync();
+        }
+        await ensureRevenueCatConfigured(); // init once here
+
         // Session check — 8s timeout
         const sessionResult = await Promise.race([
           supabase.auth.getSession(),
@@ -380,6 +388,7 @@ export default function RootLayout() {
         <AuthAlertProvider>
         <SubscriptionProvider>
           <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <OfflineBanner />
             <Stack
               screenOptions={{
                 contentStyle: {
