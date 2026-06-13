@@ -51,7 +51,8 @@ export default function SplashScreen() {
     if (profile) {
       router.replace('/(tabs)');
     } else {
-      router.replace('/onboarding/welcome');
+      await supabase.auth.signOut();
+      alert('This email is not registered. Please sign up using your phone number first.');
     }
   };
 
@@ -60,13 +61,13 @@ export default function SplashScreen() {
     
     try {
       setIsLoggingIn(true);
-      const redirectUrl = Linking.createURL('/auth/callback');
+      const redirectUrl = makeRedirectUri();
+      console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);
       
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
         },
       });
 
