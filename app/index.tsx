@@ -1,10 +1,12 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -61,6 +63,29 @@ export default function SplashScreen() {
     
     try {
       setIsLoggingIn(true);
+      
+      if (provider === 'apple' && Platform.OS === 'ios') {
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+        
+        if (credential.identityToken) {
+          const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
+            provider: 'apple',
+            token: credential.identityToken,
+          });
+          
+          if (error) throw error;
+          await checkUserAndNavigate(sessionData.session?.user?.id);
+          return;
+        } else {
+          throw new Error('No identity token returned from Apple.');
+        }
+      }
+
       const redirectUrl = makeRedirectUri();
       console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);
       

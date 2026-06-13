@@ -345,14 +345,14 @@ export default function BasicDetailsScreen() {
     }
   };
 
-  const handleGoogleVerify = async () => {
+  const handleSocialVerify = async (provider: 'google' | 'apple') => {
     try {
       setIsLinkingGoogle(true);
       const redirectUrl = makeRedirectUri();
-      console.log('🔗 [auth] Starting Google link with redirect:', redirectUrl);
+      console.log(`🔗 [auth] Starting ${provider} link with redirect:`, redirectUrl);
       
       const { data, error } = await supabase.auth.linkIdentity({
-        provider: 'google',
+        provider,
         options: {
           redirectTo: redirectUrl,
         },
@@ -367,18 +367,19 @@ export default function BasicDetailsScreen() {
           const parsed = Linking.parse(result.url);
           let code = parsed.queryParams?.code;
           
-          const errorDesc = parsed.queryParams?.error_description || parsed.queryParams?.error;
-          if (errorDesc) {
-            throw new Error((errorDesc as string).replace(/\+/g, ' '));
-          }
+          console.log(`[auth] Success URL:`, result.url);
           
-          if (!code && result.url.includes('?')) {
-             const query = result.url.split('?')[1];
-             const params = new URLSearchParams(query);
-             code = params.get('code');
+          if (!code && result.url.includes('?code=')) {
+            const urlObj = new URL(result.url);
+            code = urlObj.searchParams.get('code');
+          } else if (!code && result.url.includes('#code=')) {
+            const hash = result.url.split('#')[1];
+            const params = new URLSearchParams(hash);
+            code = params.get('code');
           }
 
           if (code) {
+             console.log(`[auth] Got code, exchanging for session...`);
              const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
              if (sessionError) throw sessionError;
              
@@ -386,25 +387,28 @@ export default function BasicDetailsScreen() {
              const { data: userData } = await supabase.auth.getUser();
              let googleEmail = userData?.user?.email;
              if (!googleEmail && userData?.user?.identities) {
-               const googleIdentity = userData.user.identities.find(id => id.provider === 'google');
-               if (googleIdentity?.identity_data?.email) {
-                 googleEmail = googleIdentity.identity_data.email;
+               const providerIdentity = userData.user.identities.find(id => id.provider === provider);
+               if (providerIdentity?.identity_data?.email) {
+                 googleEmail = providerIdentity.identity_data.email;
                }
              }
 
              if (googleEmail) {
+               console.log(`[auth] Successfully extracted email:`, googleEmail);
                setEmail(googleEmail);
                setErrors((prev) => ({ ...prev, email: '' }));
                setStepIndex((prev) => prev + 1); // Automatically proceed!
              } else {
-               throw new Error('Could not find email address in your Google account.');
+               throw new Error(`Could not find email address in your ${provider} account.`);
              }
           } else if (result.url.includes('#error=')) {
              const hash = result.url.split('#')[1];
              const params = new URLSearchParams(hash);
              const errorDesc = params.get('error_description') || params.get('error');
+             console.log(`[auth] Error in URL hash:`, errorDesc);
              if (errorDesc) throw new Error(errorDesc);
           } else if (result.url.includes('#access_token')) {
+             console.log(`[auth] Found access_token in URL hash`);
              const hash = result.url.split('#')[1];
              const params = new URLSearchParams(hash);
              const access_token = params.get('access_token');
@@ -417,26 +421,29 @@ export default function BasicDetailsScreen() {
                const { data: userData } = await supabase.auth.getUser();
                let googleEmail = userData?.user?.email;
                if (!googleEmail && userData?.user?.identities) {
-                 const googleIdentity = userData.user.identities.find(id => id.provider === 'google');
-                 if (googleIdentity?.identity_data?.email) {
-                   googleEmail = googleIdentity.identity_data.email;
+                 const providerIdentity = userData.user.identities.find(id => id.provider === provider);
+                 if (providerIdentity?.identity_data?.email) {
+                   googleEmail = providerIdentity.identity_data.email;
                  }
                }
 
                if (googleEmail) {
+                 console.log(`[auth] Successfully extracted email from implicit flow:`, googleEmail);
                  setEmail(googleEmail);
                  setErrors((prev) => ({ ...prev, email: '' }));
                  setStepIndex((prev) => prev + 1); // Automatically proceed!
                } else {
-                 throw new Error('Could not find email address in your Google account.');
+                 throw new Error(`Could not find email address in your ${provider} account.`);
                }
              }
+          } else {
+             console.log(`[auth] Result URL did not contain code or access_token:`, result.url);
           }
         }
       }
     } catch (err: any) {
-      console.error('Google link error:', err);
-      showAlert('Verification Failed', err.message || 'Could not connect Google. Please try again.');
+      console.error(`${provider} link error:`, err);
+      showAlert('Verification Failed', err.message || `Could not connect ${provider}. Please try again.`);
     } finally {
       if (isMountedRef.current) setIsLinkingGoogle(false);
     }
@@ -530,39 +537,38 @@ export default function BasicDetailsScreen() {
             </View>
           ) : (
             <>
-              <Text style={styles.helperText}>Connect your Google account to securely verify your email address. We'll only use it for important updates.</Text>
-              <TouchableOpacity 
-                style={[
-                  { 
-                    backgroundColor: COLORS.background,
-                    borderWidth: 1.5,
-                    borderColor: COLORS.border,
-                    borderRadius: 12,
-                    paddingVertical: 16,
-                    paddingHorizontal: 20,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginTop: 16,
-                    gap: 12
-                  },
-                  isLinkingGoogle && { opacity: 0.7 }
-                ]}
-                onPress={handleGoogleVerify}
-                disabled={isLinkingGoogle}
-                activeOpacity={0.8}
-              >
-                {isLinkingGoogle ? (
-                  <ActivityIndicator color={COLORS.textPrimary} size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={24} color="#000000" />
-                    <Text style={{ color: COLORS.textPrimary, fontSize: 17, fontWeight: '600' }}>
-                      Verify with Google
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              <Text style={styles.helperText}>Connect your account to securely verify your email address. We'll only use it for important updates.</Text>
+              <View style={styles.authButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.appleButton, isLinkingGoogle && styles.buttonDisabled]}
+                  onPress={() => handleSocialVerify('apple')}
+                  disabled={isLinkingGoogle}
+                >
+                  {isLinkingGoogle ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
+                      <Text style={styles.appleButtonText}>Verify with Apple</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.googleButton, isLinkingGoogle && styles.buttonDisabled]}
+                  onPress={() => handleSocialVerify('google')}
+                  disabled={isLinkingGoogle}
+                >
+                  {isLinkingGoogle ? (
+                    <ActivityIndicator color="#000000" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={20} color="#000000" style={styles.socialIcon} />
+                      <Text style={styles.googleButtonText}>Verify with Google</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </>
           )}
           {errors[currentStep.id] ? <Text style={[styles.errorText, { marginTop: 12, textAlign: 'center' }]}>{errors[currentStep.id]}</Text> : null}
@@ -585,12 +591,8 @@ export default function BasicDetailsScreen() {
           onChangeText={(text) => {
             if (currentStep.id === 'fullName') {
               setFullName(text);
-            } else if (currentStep.id === 'email') {
-              setEmail(text);
-            } else if (currentStep.id === 'location') {
-              setLocation(text);
+              setErrors((prev) => ({ ...prev, fullName: '' }));
             }
-            setErrors((prev) => ({ ...prev, [currentStep.id]: '' }));
           }}
         />
         {errors[currentStep.id] ? <Text style={styles.errorText}>{errors[currentStep.id]}</Text> : null}
@@ -839,6 +841,42 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#DC2626',
     fontSize: 13,
+  },
+  authButtonsContainer: {
+    gap: 12,
+    marginTop: 16,
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 12,
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+  },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  socialIcon: {
+    marginRight: 4,
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  googleButtonText: {
+    color: '#000000',
+    fontSize: 17,
+    fontWeight: '600',
   },
   detailContainer: {
     marginTop: 16,

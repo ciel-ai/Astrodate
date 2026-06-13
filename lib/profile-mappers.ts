@@ -78,12 +78,18 @@ export const getAstrologyInsights = (westernSign?: string) => {
 
 export const getCompatibilitySubScores = (profile: Profile) => {
   // Use existing scores or derive from final_score to simulate Emotional, Communication, Values
-  const baseScore = profile.final_score ?? profile.indian_score ?? profile.western_score ?? 85;
+  let baseScore = profile.final_score ?? profile.indian_score ?? profile.western_score;
+  
+  if (!baseScore) {
+    // Generate a stable pseudo-random number between 75 and 98 based on the profile ID
+    const idHash = profile.id ? profile.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 85;
+    baseScore = 75 + (idHash % 24);
+  }
   
   return {
     overall: baseScore,
-    emotional: profile.personality_score ?? Math.min(100, Math.round(baseScore * 1.05)),
-    communication: profile.western_score ?? Math.min(100, Math.round(baseScore * 0.95)),
-    values: profile.indian_score ?? Math.min(100, Math.round(baseScore * 1.02)),
+    emotional: profile.personality_score ?? Math.min(99, Math.round(baseScore * 1.05)),
+    communication: profile.western_score ?? Math.min(98, Math.round(baseScore * 0.95)),
+    values: profile.indian_score ?? Math.min(99, Math.round(baseScore * 1.02)),
   };
 };

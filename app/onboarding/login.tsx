@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 WebBrowser.maybeCompleteAuthSession();
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -136,6 +137,29 @@ export default function LoginScreen() {
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
     try {
       setIsLoggingIn(true);
+      
+      if (provider === 'apple' && Platform.OS === 'ios') {
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+        
+        if (credential.identityToken) {
+          const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
+            provider: 'apple',
+            token: credential.identityToken,
+          });
+          
+          if (error) throw error;
+          await checkUserAndNavigate(sessionData.session?.user?.id);
+          return;
+        } else {
+          throw new Error('No identity token returned from Apple.');
+        }
+      }
+
       const redirectUrl = makeRedirectUri();
       console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);
       
