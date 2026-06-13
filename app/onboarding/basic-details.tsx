@@ -5,6 +5,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
+import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { makeRedirectUri } from 'expo-auth-session';
 import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -16,6 +21,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -115,6 +121,10 @@ export default function BasicDetailsScreen() {
   const [thanksVisible, setThanksVisible] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [emailOtp, setEmailOtp] = useState('');
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
   const isMountedRef = React.useRef(true);
   const { showAlert } = useAuthAlert();
 
@@ -204,7 +214,9 @@ export default function BasicDetailsScreen() {
           nextErrors.fullName = 'Enter at least 5 characters.';
           break;
         case 'email':
-          nextErrors.email = 'Enter a valid email address.';
+          if (!email) {
+             nextErrors.email = 'Please verify your email with Google to continue.';
+          }
           break;
         case 'location':
           nextErrors.location = 'Let us know your city.';
@@ -220,6 +232,12 @@ export default function BasicDetailsScreen() {
     setErrors({});
 
     if (stepIndex < totalSteps - 1) {
+      if (currentStep.id === 'email') {
+        // Just proceed to the next step, email is already validated and linked
+        setStepIndex((prev) => prev + 1);
+        return;
+      }
+      
       setStepIndex((prev) => prev + 1);
       return;
     }
@@ -287,9 +305,14 @@ export default function BasicDetailsScreen() {
     }
   };
 
-  const handleBack = () => {
+  const handleBack = async () => {
     if (stepIndex === 0) {
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        await supabase.auth.signOut();
+        router.replace('/onboarding/welcome');
+      }
       return;
     }
     setStepIndex((prev) => Math.max(prev - 1, 0));
@@ -319,6 +342,103 @@ export default function BasicDetailsScreen() {
       showAlert('Error', 'Failed to get location. Please try again.');
     } finally {
       if (isMountedRef.current) setLocationLoading(false);
+    }
+  };
+
+  const handleGoogleVerify = async () => {
+    try {
+      setIsLinkingGoogle(true);
+      const redirectUrl = makeRedirectUri();
+      console.log('🔗 [auth] Starting Google link with redirect:', redirectUrl);
+      
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+        if (result.type === 'success' && result.url) {
+          const parsed = Linking.parse(result.url);
+          let code = parsed.queryParams?.code;
+          
+          const errorDesc = parsed.queryParams?.error_description || parsed.queryParams?.error;
+          if (errorDesc) {
+            throw new Error((errorDesc as string).replace(/\+/g, ' '));
+          }
+          
+          if (!code && result.url.includes('?')) {
+             const query = result.url.split('?')[1];
+             const params = new URLSearchParams(query);
+             code = params.get('code');
+          }
+
+          if (code) {
+             const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
+             if (sessionError) throw sessionError;
+             
+             // Fetch updated user to get their Google email
+             const { data: userData } = await supabase.auth.getUser();
+             let googleEmail = userData?.user?.email;
+             if (!googleEmail && userData?.user?.identities) {
+               const googleIdentity = userData.user.identities.find(id => id.provider === 'google');
+               if (googleIdentity?.identity_data?.email) {
+                 googleEmail = googleIdentity.identity_data.email;
+               }
+             }
+
+             if (googleEmail) {
+               setEmail(googleEmail);
+               setErrors((prev) => ({ ...prev, email: '' }));
+               setStepIndex((prev) => prev + 1); // Automatically proceed!
+             } else {
+               throw new Error('Could not find email address in your Google account.');
+             }
+          } else if (result.url.includes('#error=')) {
+             const hash = result.url.split('#')[1];
+             const params = new URLSearchParams(hash);
+             const errorDesc = params.get('error_description') || params.get('error');
+             if (errorDesc) throw new Error(errorDesc);
+          } else if (result.url.includes('#access_token')) {
+             const hash = result.url.split('#')[1];
+             const params = new URLSearchParams(hash);
+             const access_token = params.get('access_token');
+             const refresh_token = params.get('refresh_token');
+             
+             if (access_token && refresh_token) {
+               await supabase.auth.setSession({ access_token, refresh_token });
+               
+               // Fetch updated user to get their Google email
+               const { data: userData } = await supabase.auth.getUser();
+               let googleEmail = userData?.user?.email;
+               if (!googleEmail && userData?.user?.identities) {
+                 const googleIdentity = userData.user.identities.find(id => id.provider === 'google');
+                 if (googleIdentity?.identity_data?.email) {
+                   googleEmail = googleIdentity.identity_data.email;
+                 }
+               }
+
+               if (googleEmail) {
+                 setEmail(googleEmail);
+                 setErrors((prev) => ({ ...prev, email: '' }));
+                 setStepIndex((prev) => prev + 1); // Automatically proceed!
+               } else {
+                 throw new Error('Could not find email address in your Google account.');
+               }
+             }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error('Google link error:', err);
+      showAlert('Verification Failed', err.message || 'Could not connect Google. Please try again.');
+    } finally {
+      if (isMountedRef.current) setIsLinkingGoogle(false);
     }
   };
 
@@ -398,6 +518,57 @@ export default function BasicDetailsScreen() {
     }
 
     const shouldCapitalizeWords = currentStep.id === 'fullName';
+
+    if (currentStep.id === 'email') {
+      return (
+        <View style={styles.inputWrapper}>
+          {email ? (
+            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+              <MaterialIcons name="check-circle" size={48} color={COLORS.success} />
+              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginTop: 12 }}>Email Verified</Text>
+              <Text style={{ fontSize: 16, color: COLORS.textSecondary, marginTop: 4 }}>{email}</Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.helperText}>Connect your Google account to securely verify your email address. We'll only use it for important updates.</Text>
+              <TouchableOpacity 
+                style={[
+                  { 
+                    backgroundColor: COLORS.background,
+                    borderWidth: 1.5,
+                    borderColor: COLORS.border,
+                    borderRadius: 12,
+                    paddingVertical: 16,
+                    paddingHorizontal: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 16,
+                    gap: 12
+                  },
+                  isLinkingGoogle && { opacity: 0.7 }
+                ]}
+                onPress={handleGoogleVerify}
+                disabled={isLinkingGoogle}
+                activeOpacity={0.8}
+              >
+                {isLinkingGoogle ? (
+                  <ActivityIndicator color={COLORS.textPrimary} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-google" size={24} color="#000000" />
+                    <Text style={{ color: COLORS.textPrimary, fontSize: 17, fontWeight: '600' }}>
+                      Verify with Google
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+          {errors[currentStep.id] ? <Text style={[styles.errorText, { marginTop: 12, textAlign: 'center' }]}>{errors[currentStep.id]}</Text> : null}
+        </View>
+      );
+    }
 
     return (
       <View style={styles.inputWrapper}>

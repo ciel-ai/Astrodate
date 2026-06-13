@@ -233,11 +233,16 @@ export default function RootLayout() {
   useEffect(() => {
     const processVerifyLink = (url: string) => {
       if (!isMountedRef.current || processedDeepLinkRef.current === url) return;
-      if (
+      // Only intercept actual email verification links, NOT Google OAuth links.
+      // Email links contain type=signup, type=recovery, type=email_change, etc.
+      // Use '&type=' or '?type=' to avoid matching 'token_type=bearer' from OAuth.
+      const hasStrictType = url.includes('&type=') || url.includes('?type=');
+      const isEmailVerificationLink = 
         url.includes('auth/verify') ||
-        url.includes('token_hash') ||
-        url.includes('access_token')
-      ) {
+        (url.includes('token_hash') && hasStrictType) ||
+        (url.includes('access_token') && hasStrictType);
+
+      if (isEmailVerificationLink) {
         processedDeepLinkRef.current = url;
         console.log('🔗 [Layout] Email verification deep link detected:', url);
         // FIX BUG 2: Pass the URL as a param so verify.tsx doesn't need to call
