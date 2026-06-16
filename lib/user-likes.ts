@@ -42,16 +42,29 @@ export async function saveUserLike(
       return { success: false, error: 'Cannot like yourself' };
     }
 
-    if (actionType === 'super_like') {
+    if (actionType === 'like') {
       const { data: allowed, error: rpcError } = await supabase
-        .rpc('check_super_like_quota' as any, { p_user_id: userId } as any);
-      
+        .rpc('consume_like' as any, { p_user_id: userId } as any);
+
       if (rpcError) {
-        throw new Error(rpcError.message || 'RPC check_super_like_quota failed');
+        throw new Error(rpcError.message || 'RPC consume_like failed');
       }
 
       if (!allowed) {
-        return { success: false, error: 'QUOTA_EXCEEDED' };
+        return { success: false, error: 'LIKE_QUOTA_EXCEEDED' };
+      }
+    }
+
+    if (actionType === 'super_like') {
+      const { data: allowed, error: rpcError } = await supabase
+        .rpc('consume_super_like' as any, { p_user_id: userId } as any);
+
+      if (rpcError) {
+        throw new Error(rpcError.message || 'RPC consume_super_like failed');
+      }
+
+      if (!allowed) {
+        return { success: false, error: 'SUPER_LIKE_QUOTA_EXCEEDED' };
       }
     }
 
