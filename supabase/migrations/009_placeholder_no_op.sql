@@ -1,0 +1,16 @@
+-- Migration 009 (placeholder — retroactively documented)
+--
+-- This migration number was skipped during early development.
+-- After auditing the full schema lineage (008 → 010), no orphaned
+-- objects or missing DDL could be attributed to this slot.
+--
+-- 008 created user_likes; 010 created user_matches.  The mutual-like
+-- check that bridges these two tables is handled entirely client-side
+-- in lib/user-likes.ts (checkMutualLike → saveMatch), so no
+-- server-side trigger or RPC was needed between them.
+--
+-- This file exists solely to fill the numbering gap and prevent
+-- migration-runner conflicts on fresh deployments or rollbacks.
+--
+-- No-op: nothing to execute.
+SELECT 1;

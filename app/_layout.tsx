@@ -1,3 +1,4 @@
+
 import { GlobalAuthAlertModal } from '@/components/global-auth-alert-modal';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -21,6 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, AppStateStatus, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-reanimated';
 
 SplashScreen.preventAutoHideAsync();
@@ -31,7 +33,7 @@ type ProfileLookupResult = {
   error: unknown;
 };
 
-export default function RootLayout() {
+function RootLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const segments = useSegments();
@@ -123,10 +125,21 @@ export default function RootLayout() {
       }
     };
 
+    // Helper to detect if a session token is present locally without hitting network
+    const checkLocalSession = async () => {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        return keys.some(k => k.includes('-auth-token'));
+      } catch {
+        return false;
+      }
+    };
+
     // Hard safety net: if Supabase/network hangs beyond 12s, render anyway
-    hardTimeoutRef.current = setTimeout(() => {
+    hardTimeoutRef.current = setTimeout(async () => {
       console.warn('⚠️ [Layout] Startup hard timeout — forcing render');
-      finishBoot('/onboarding/welcome');
+      const hasSession = await checkLocalSession();
+      finishBoot(hasSession ? '/(tabs)' : '/onboarding/welcome');
     }, STARTUP_HARD_TIMEOUT_MS);
 
     const bootstrap = async () => {
@@ -175,9 +188,17 @@ export default function RootLayout() {
         if (!isMountedRef.current) return;
 
         finishBoot(profileResult?.data ? '/(tabs)' : '/onboarding/basic-details');
-      } catch (err) {
+      } catch (err: any) {
         console.error('[Layout] Bootstrap error (non-fatal):', err);
-        if (isMountedRef.current) finishBoot('/onboarding/welcome');
+        if (isMountedRef.current) {
+          if (err?.message === 'session timeout' || err?.message === 'profile timeout') {
+            // They have a local session trying to refresh over a poor network. 
+            // Send them to the main app where offline state/retry logic can handle it.
+            finishBoot('/(tabs)');
+          } else {
+            finishBoot('/onboarding/welcome');
+          }
+        }
       }
     };
 
@@ -456,3 +477,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+export default RootLayout;

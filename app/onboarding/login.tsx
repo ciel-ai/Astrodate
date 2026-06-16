@@ -158,7 +158,8 @@ export default function LoginScreen() {
           if (!code && result.url.includes('?')) {
              const query = result.url.split('?')[1];
              const params = new URLSearchParams(query);
-             code = params.get('code');
+             const codeFromQuery = params.get('code');
+             if (codeFromQuery) code = codeFromQuery;
           }
 
           if (code) {
@@ -266,6 +267,8 @@ export default function LoginScreen() {
                   maxLength={10}
                   onFocus={() => setIsFocused(true)}
                   onBlur={() => setIsFocused(false)}
+                  accessibilityLabel="Phone number input"
+                  accessibilityHint="Enter your mobile number for login"
                 />
               </View>
 
@@ -275,6 +278,10 @@ export default function LoginScreen() {
                 activeOpacity={0.85}
                 disabled={loading}
                 style={[styles.buttonWrapper, phoneNumber.length === 0 && styles.buttonDisabled]}
+                accessibilityRole="button"
+                accessibilityLabel="Send OTP"
+                accessibilityHint="Requests a one-time password to be sent to your phone number"
+                accessibilityState={{ disabled: loading || phoneNumber.length === 0 }}
               >
                 <LinearGradient
                   colors={['#A855F7', '#6366F1']}
@@ -302,10 +309,13 @@ export default function LoginScreen() {
 
               {/* Social Login Buttons */}
               <View style={styles.authButtonsContainer}>
-                <TouchableOpacity 
-                  style={[styles.socialButton, styles.appleButton, isLoggingIn && styles.buttonDisabled]} 
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.appleButton, isLoggingIn && styles.buttonDisabled]}
                   onPress={() => handleSocialLogin('apple')}
                   disabled={isLoggingIn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Apple"
+                  accessibilityState={{ disabled: isLoggingIn }}
                 >
                   {isLoggingIn ? (
                     <ActivityIndicator color="#FFFFFF" size="small" />
@@ -317,10 +327,13 @@ export default function LoginScreen() {
                   )}
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={[styles.socialButton, styles.googleButton, isLoggingIn && styles.buttonDisabled]} 
+                <TouchableOpacity
+                  style={[styles.socialButton, styles.googleButton, isLoggingIn && styles.buttonDisabled]}
                   onPress={() => handleSocialLogin('google')}
                   disabled={isLoggingIn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continue with Google"
+                  accessibilityState={{ disabled: isLoggingIn }}
                 >
                   {isLoggingIn ? (
                     <ActivityIndicator color="#000000" size="small" />
@@ -336,7 +349,12 @@ export default function LoginScreen() {
               {/* Sign up link */}
               <View style={styles.signupRow}>
                 <Text style={styles.signupText}>Don't have an account? </Text>
-                <TouchableOpacity onPress={() => router.push('/onboarding/signup')}>
+                <TouchableOpacity 
+                  onPress={() => router.push('/onboarding/signup')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sign up"
+                  accessibilityHint="Navigates to the account registration screen"
+                >
                   <Text style={styles.signupLink}>Sign up</Text>
                 </TouchableOpacity>
               </View>

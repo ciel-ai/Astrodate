@@ -46,7 +46,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { planId, planName, amountPaise, currency, userEmail, userPhone, userName } = body;
+    const { planId, planName, amountPaise, currency, userEmail, userPhone, userName, platform } = body;
     const userId = user.id;
 
     if (!planId || !amountPaise) {
@@ -110,7 +110,7 @@ serve(async (req) => {
         customer: { name: userName ?? '', email: userEmail ?? '', contact: userPhone ?? '' },
         notify: { sms: !!userPhone, email: !!userEmail },
         reminder_enable: true,
-        notes: { user_id: userId, plan_id: planId },
+        notes: { user_id: userId, plan_id: planId, platform: platform ?? 'unknown' },
         callback_url: 'https://astrodate.app/payment-success',
         callback_method: 'get'
       })

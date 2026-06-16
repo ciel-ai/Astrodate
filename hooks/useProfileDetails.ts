@@ -153,11 +153,18 @@ export function useProfileDetails(userId: string | null): UseProfileDetailsResul
                   uri:
                     photosData.find((p: any) => p.is_primary)?.photo_url ||
                     photosData[0].photo_url,
+                  thumbnail:
+                    photosData.find((p: any) => p.is_primary)?.thumbnail_url ||
+                    photosData[0].thumbnail_url ||
+                    undefined,
                 }
               : require('@/assets/images/avatar-placeholder.png'),
           photos:
             photosData.length > 0
-              ? photosData.map((p: any) => ({ uri: p.photo_url }))
+              ? photosData.map((p: any) => ({ 
+                  uri: p.photo_url, 
+                  thumbnail: p.thumbnail_url ?? undefined 
+                }))
               : undefined,
           compatibility: match ? Number(match.final_match_score ?? 0) : undefined,
           astrology_score: match?.indian_score

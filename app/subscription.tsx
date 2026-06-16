@@ -13,7 +13,7 @@
 
 import { SubscriptionStatusBanner } from '@/components/SubscriptionStatusBanner';
 import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
-import { REVENUECAT_API_KEY_IOS, REVENUECAT_CONSUMABLE_IDS, type RevenueCatPlanSlug } from '@/lib/iap-products';
+import { type RevenueCatPlanSlug } from '@/lib/iap-products';
 import { getPlanCatalog } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { useSubscriptionPayment } from '@/lib/useSubscriptionPayment';
@@ -23,7 +23,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Linking,
   Platform,
   ScrollView,
@@ -32,10 +31,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Purchases, { PURCHASES_ERROR_CODE } from 'react-native-purchases';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ─── Static plan display definitions ─────────────────────────────────────────
 // These drive the UI only. Prices shown are fallbacks — the real
@@ -105,14 +101,6 @@ const PLANS: PlanDef[] = [
       { label: 'Enhanced recommendations',                     included: true },
     ],
   },
-];
-
-// ─── Consumables ─────────────────────────────────────────────────────────────
-const CONSUMABLES = [
-  { id: 'stars_3',    emoji: '⭐', name: '3 Stars',               desc: 'Jump to the top of their likes',      price: '₹149' },
-  { id: 'boost_1',   emoji: '🚀', name: 'Profile Boost',         desc: '30 min of top-of-stack visibility',   price: '₹199' },
-  { id: 'synastry_1',emoji: '🔭', name: 'Synastry Report',       desc: 'Deep compatibility read for one match',price: '₹99'  },
-  { id: 'ai_1',      emoji: '🔮', name: 'AI Compatibility Read', desc: 'Instant AI insight on any match',      price: '₹49'  },
 ];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -197,41 +185,6 @@ export default function SubscriptionScreen() {
 
   const formatPrice = (paise: number) =>
     paise === 0 ? 'Free forever' : `₹${(paise / 100).toFixed(0)} / mo`;
-
-  const handleConsumablePurchase = async (consumableId: string) => {
-    if (Platform.OS === 'ios') {
-      try {
-        if (!REVENUECAT_API_KEY_IOS) {
-          Alert.alert('Error', 'RevenueCat iOS API key is missing.');
-          return;
-        }
-        Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS });
-        
-        const rcId = REVENUECAT_CONSUMABLE_IDS[consumableId as keyof typeof REVENUECAT_CONSUMABLE_IDS];
-        if (!rcId) {
-          Alert.alert('Error', 'Invalid product configuration.');
-          return;
-        }
-
-        const products = await Purchases.getProducts([rcId]);
-        if (products && products.length > 0) {
-          const product = products[0];
-          await Purchases.purchaseStoreProduct(product);
-          Alert.alert('Success', 'Purchase completed successfully!');
-        } else {
-          Alert.alert('Error', 'Product not found on the App Store.');
-        }
-      } catch (error: any) {
-        if (error.code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
-          Alert.alert('Cancelled', 'Purchase was cancelled.');
-        } else {
-          Alert.alert('Error', error.message || 'An error occurred during purchase.');
-        }
-      }
-    } else if (Platform.OS === 'android') {
-      Alert.alert('Coming soon', 'À la carte purchases on Android coming soon.');
-    }
-  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -394,23 +347,7 @@ export default function SubscriptionScreen() {
           })
         )}
 
-        {/* À la carte consumables */}
-        <View style={styles.consumablesCard}>
-          <Text style={styles.consumablesTitle}>✦ À la carte</Text>
-          <Text style={styles.consumablesSub}>
-            No subscription? Buy exactly what you need.
-          </Text>
-          {CONSUMABLES.map(c => (
-            <TouchableOpacity key={c.id} style={styles.consumableRow} onPress={() => handleConsumablePurchase(c.id)} activeOpacity={0.7}>
-              <Text style={styles.consumableEmoji}>{c.emoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.consumableName}>{c.name}</Text>
-                <Text style={styles.consumableDesc}>{c.desc}</Text>
-              </View>
-              <Text style={styles.consumablePrice}>{c.price}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* À la carte consumables — hidden until backend fulfillment is ready */}
 
         {/* Footer */}
         <View style={styles.footer}>

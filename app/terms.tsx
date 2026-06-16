@@ -91,8 +91,8 @@ Violations may result in immediate account suspension or permanent ban without r
     id: 'subscription',
     title: '5. Subscriptions & Payments',
     icon: 'card-membership' as const,
-    content: `Stellar Subscription Plans
-AstroDate offers optional paid subscriptions ("Stellar") that unlock premium features including unlimited likes, seeing who liked you, advanced filters, and priority match visibility.
+    content: `Astro+ / AstroX Subscription Plans
+AstroDate offers optional paid subscriptions ("Astro+" and "AstroX") that unlock premium features including unlimited likes, seeing who liked you, advanced filters, and priority match visibility.
 
 Pricing & Billing
 • Subscription prices are displayed in Indian Rupees (INR) inclusive of applicable GST

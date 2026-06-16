@@ -16,6 +16,7 @@ export type PlanCheckoutPayload = {
   userName?: string;
   callbackUrl?: string;
   userId?: string; // required for webhook to attribute payment
+  platform?: string;
 };
 
 type RazorpayPaymentLinkResponse = {

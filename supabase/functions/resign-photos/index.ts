@@ -51,14 +51,30 @@ Deno.serve(async (req) => {
     for (const photo of photos ?? []) {
       if (!photo.storage_path) continue;
 
-      const { data } = await supabaseAdmin.storage
-        .from('user-photos')
-        .createSignedUrl(photo.storage_path, 60 * 60 * 24 * 365); // 1 year
+      const expiry = 60 * 60 * 24 * 365; // 1 year
+      const [fullRes, thumbRes] = await Promise.all([
+        supabaseAdmin.storage
+          .from('user-photos')
+          .createSignedUrl(photo.storage_path, expiry, {
+            transform: { width: 800, quality: 80 }
+          }),
+        supabaseAdmin.storage
+          .from('user-photos')
+          .createSignedUrl(photo.storage_path, expiry, {
+            transform: { width: 400, quality: 80 }
+          })
+      ]);
 
-      if (data?.signedUrl) {
+      const photoUrl = fullRes.data?.signedUrl;
+      const thumbnailUrl = thumbRes.data?.signedUrl;
+
+      if (photoUrl && thumbnailUrl) {
         await supabaseAdmin
           .from('user_photos')
-          .update({ photo_url: data.signedUrl })
+          .update({ 
+            photo_url: photoUrl,
+            thumbnail_url: thumbnailUrl
+          })
           .eq('id', photo.id);
         updatedCount++;
       }

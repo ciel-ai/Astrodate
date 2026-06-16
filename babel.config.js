@@ -6,6 +6,7 @@ module.exports = function (api) {
     return {
         presets: ['babel-preset-expo'],
         plugins: [
+            ['transform-inline-environment-variables', { include: ['REVENUECAT_API_KEY_IOS'] }],
             // Strip all console.log/warn/error calls in production builds.
             // Has zero effect on development — logs still appear normally.
             ...(isProduction ? [['transform-remove-console', { exclude: ['error', 'warn'] }]] : []),

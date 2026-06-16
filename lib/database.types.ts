@@ -100,6 +100,7 @@ export type Database = {
           user_id: string | null;
           photo_url: string;
           storage_path: string | null;
+          thumbnail_url: string | null;
           display_order: number | null;
           is_primary: boolean | null;
           created_at: string | null;
@@ -109,6 +110,7 @@ export type Database = {
           user_id: string | null;
           display_order: number | null;
           storage_path: string | null;
+          thumbnail_url: string | null;
           is_primary: boolean | null;
           created_at: string | null;
         }>;

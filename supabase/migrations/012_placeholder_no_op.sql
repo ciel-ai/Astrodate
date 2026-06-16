@@ -1,0 +1,14 @@
+-- Migration 012 (placeholder — retroactively documented)
+--
+-- This migration number was skipped during early development.
+-- After auditing the full schema lineage (010 → 013), no orphaned
+-- objects or missing DDL could be attributed to this slot.
+--
+-- 010 created user_matches; 013 added the check_auth_user_exists RPC.
+-- No intermediate schema change was required.
+--
+-- This file exists solely to fill the numbering gap and prevent
+-- migration-runner conflicts on fresh deployments or rollbacks.
+--
+-- No-op: nothing to execute.
+SELECT 1;

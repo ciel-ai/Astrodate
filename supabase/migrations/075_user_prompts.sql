@@ -16,26 +16,28 @@ CREATE TABLE IF NOT EXISTS public.user_prompts (
 -- Enable Row Level Security (RLS) on user_prompts
 ALTER TABLE public.user_prompts ENABLE ROW LEVEL SECURITY;
 
--- Select policy: Authenticated users can read prompts of others to display in the Discover feed
+-- Policies (drop first so the migration is idempotent)
+DROP POLICY IF EXISTS "Authenticated users can view prompts" ON public.user_prompts;
+DROP POLICY IF EXISTS "Users can insert own prompts" ON public.user_prompts;
+DROP POLICY IF EXISTS "Users can update own prompts" ON public.user_prompts;
+DROP POLICY IF EXISTS "Users can delete own prompts" ON public.user_prompts;
+
 CREATE POLICY "Authenticated users can view prompts"
   ON public.user_prompts
   FOR SELECT
   USING (auth.role() = 'authenticated');
 
--- Insert policy: Users can only add their own prompts
 CREATE POLICY "Users can insert own prompts"
   ON public.user_prompts
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
--- Update policy: Users can only edit their own prompts
 CREATE POLICY "Users can update own prompts"
   ON public.user_prompts
   FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Delete policy: Users can delete their own prompts
 CREATE POLICY "Users can delete own prompts"
   ON public.user_prompts
   FOR DELETE

@@ -22,7 +22,7 @@ export const getMatch = async (
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('❌ Could not get current user:', userError);
+      if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
       return {
         success: false,
         error: 'User not authenticated',
@@ -86,7 +86,7 @@ export const getAllMatches = async (): Promise<{ success: boolean; data?: Match[
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('❌ Could not get current user:', userError);
+      if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
       return {
         success: false,
         error: 'User not authenticated',
@@ -179,7 +179,7 @@ export const deleteMatch = async (
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('❌ Could not get current user:', userError);
+      if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
       return {
         success: false,
         error: 'User not authenticated',

@@ -179,7 +179,7 @@ export default function LikesScreen() {
         .in('user_id', userIds),
       supabase
         .from('user_photos')
-        .select('user_id, photo_url, is_primary')
+        .select('user_id, photo_url, thumbnail_url, is_primary')
         .in('user_id', userIds),
     ]);
 
@@ -212,7 +212,7 @@ export default function LikesScreen() {
         distance: profile.location || 'Location not set',
         compatibility: match ? Math.round(Number(match.final_match_score ?? 0)) : undefined,
         image: primaryPhoto?.photo_url
-          ? { uri: primaryPhoto.photo_url }
+          ? { uri: primaryPhoto.photo_url, thumbnail: primaryPhoto.thumbnail_url ?? undefined }
           : require('@/assets/images/avatar-placeholder.png'),
       };
     }
@@ -256,7 +256,7 @@ export default function LikesScreen() {
           .in('user_id', userIds),
         supabase
           .from('user_photos')
-          .select('user_id, photo_url, is_primary')
+          .select('user_id, photo_url, thumbnail_url, is_primary')
           .in('user_id', userIds),
       ]);
 
@@ -290,7 +290,7 @@ export default function LikesScreen() {
           distance: profile.location || 'Location not set',
           compatibility: match ? Math.round(Number(match.final_match_score ?? 0)) : undefined,
           image: primaryPhoto?.photo_url
-            ? { uri: primaryPhoto.photo_url }
+            ? { uri: primaryPhoto.photo_url, thumbnail: primaryPhoto.thumbnail_url ?? undefined }
             : require('@/assets/images/avatar-placeholder.png'),
         };
       }
@@ -584,6 +584,7 @@ export default function LikesScreen() {
                         <View style={styles.imageContainer}>
                           <Image
                             source={like.image}
+                            placeholder={like.image?.thumbnail ? { uri: like.image.thumbnail } : undefined}
                             style={styles.profileImage}
                             contentFit="cover"
                             transition={500}
@@ -665,6 +666,7 @@ export default function LikesScreen() {
                         <View style={styles.imageContainer}>
                           <Image
                             source={like.image}
+                            placeholder={like.image?.thumbnail ? { uri: like.image.thumbnail } : undefined}
                             style={styles.profileImage}
                             contentFit="cover"
                             transition={500}
@@ -750,6 +752,7 @@ export default function LikesScreen() {
                         <View style={styles.imageContainer}>
                           <Image
                             source={like.image}
+                            placeholder={like.image?.thumbnail ? { uri: like.image.thumbnail } : undefined}
                             style={styles.profileImage}
                             contentFit="cover"
                             transition={500}

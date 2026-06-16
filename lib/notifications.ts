@@ -35,8 +35,8 @@ Notifications.setNotificationHandler({
 export async function syncPushTokenForCurrentUser(): Promise<void> {
   if (Platform.OS === 'web') return;
 
-  const { data } = await supabase.auth.getSession();
-  if (!data.session?.user?.id) return;
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user?.id) return;
 
   const permission = await getNotificationPermission();
   if (!permission) {
@@ -68,8 +68,8 @@ export async function deactivateCurrentDevicePushToken(): Promise<void> {
       AsyncStorage.getItem(EXPO_TOKEN_KEY),
     ]);
 
-    const { data } = await supabase.auth.getSession();
-    if (!data.session?.user?.id) return;
+    const { data } = await supabase.auth.getUser();
+    if (!data?.user?.id) return;
 
     const { error } = await supabase.rpc('revoke_push_token', {
       p_expo_push_token: token,
@@ -93,8 +93,8 @@ export async function deactivateCurrentDevicePushToken(): Promise<void> {
 export async function syncNotificationPreferences(
   preferences: NotificationPreferenceInput
 ): Promise<void> {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session?.user?.id) return;
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user?.id) return;
 
   const { error } = await supabase.rpc('update_notification_preferences', {
     p_new_matches_enabled: preferences.new_matches_enabled ?? null,
@@ -108,8 +108,8 @@ export async function syncNotificationPreferences(
 }
 
 export async function drainPendingPushNotifications(): Promise<void> {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session?.user?.id) return;
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user?.id) return;
 
   const { error } = await supabase.functions.invoke('send-push-notification', {
     body: { batch_size: 25 },

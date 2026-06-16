@@ -326,13 +326,15 @@ export default function SplashScreen() {
                   {'\n'}
                   These details are used exclusively for astrological calculations and compatibility analysis.
                   {'\n\n'}
-                  <Text style={styles.bold}>Verification Data:</Text>
+                  <Text style={styles.bold}>Biometric & Verification Data:</Text>
                   {'\n'}
-                  • Phone verification is processed securely to verify your identity
+                  • We use third-party AI (Google Gemini) to process facial imagery from your photos for liveness detection and face verification
                   {'\n'}
-                  • Verification data is encrypted and stored with industry-standard security
+                  • This biometric data is processed in real-time, never used for training models, and discarded immediately after verification
                   {'\n'}
-                  • We do not share your verification information with third parties
+                  • Phone verification is processed securely to authenticate your identity
+                  {'\n'}
+                  • We do not share your verification information with unauthorized third parties
                   {'\n\n'}
                   <Text style={styles.bold}>Profile Information:</Text>
                   {'\n'}

@@ -56,7 +56,7 @@ export interface ProfileData {
   editedProfile: ProfileState;
   setEditedProfile: React.Dispatch<React.SetStateAction<ProfileState>>;
   profileDbFields: { phone_number: string; email: string; gender?: string | null; gender_detail?: string | null } | null;
-  userPhotos: Array<{ id: string; photo_url: string; is_primary: boolean; display_order: number }>;
+  userPhotos: Array<{ id: string; photo_url: string; thumbnail_url?: string; is_primary: boolean; display_order: number }>;
   primaryPhotoUri: string | null;
 
   profileCompletion: number;
@@ -129,6 +129,7 @@ export function useProfileData(): ProfileData {
   const [userPhotos, setUserPhotos] = useState<Array<{
     id: string;
     photo_url: string;
+    thumbnail_url?: string;
     is_primary: boolean;
     display_order: number;
   }>>([]);
@@ -294,6 +295,7 @@ export function useProfileData(): ProfileData {
           sortedPhotos.map((photo: any) => ({
             id: photo.id,
             photo_url: photo.photo_url,
+            thumbnail_url: photo.thumbnail_url ?? undefined,
             is_primary: Boolean(photo.is_primary),
             display_order: Number(photo.display_order ?? 0),
           }))
@@ -304,7 +306,7 @@ export function useProfileData(): ProfileData {
           setPrimaryPhotoUri(primaryPhoto.photo_url);
         }
 
-        const photoSources = sortedPhotos.map((photo: any) => ({ uri: photo.photo_url }));
+        const photoSources = sortedPhotos.map((photo: any) => ({ uri: photo.photo_url, thumbnail: photo.thumbnail_url ?? undefined }));
         setEditedProfile(prev => ({
           ...prev,
           images: photoSources.length > 0 ? photoSources : prev.images,

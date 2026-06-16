@@ -24,7 +24,7 @@ export const saveSection1Responses = async (responses: Section1Responses) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('❌ Could not get current user:', userError);
+      if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
       return {
         success: false,
         error: 'User not authenticated',
@@ -112,7 +112,7 @@ export const getSection1Responses = async (userId?: string) => {
     if (!targetUserId) {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error('❌ Could not get current user:', userError);
+        if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
         return { success: false, error: 'User not authenticated' };
       }
       targetUserId = user.id;
@@ -151,7 +151,7 @@ export const deleteSection1Responses = async () => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('❌ Could not get current user:', userError);
+      if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
       return {
         success: false,
         error: 'User not authenticated',

@@ -467,7 +467,10 @@ export default function ChatsScreen() {
           setFilteredChats(finalChatItems);
         }
       } else {
-        console.error('❌ Failed to fetch users:', result.error);
+        // Only log if it's not a normal unauthenticated error
+        if (result.error !== 'User not authenticated') {
+          console.error('❌ Failed to fetch users:', result.error);
+        }
 
         // On cold app start auth restoration can lag; retry instead of showing permanent empty state.
         // authRetryCountRef is declared at component level (above fetchUsers)

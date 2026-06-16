@@ -43,6 +43,10 @@ Astrological Data (Sensitive)
 • Astrological chart data derived from the above inputs
 • This data is classified as Sensitive Personal Data under DPDP Act 2023
 
+Biometric & Face Data (Sensitive)
+• When you upload profile photos, we process the facial imagery to verify that the photo contains a real human face and meets our guidelines.
+• We do not extract, store, or create biometric templates or facial geometry for future identification. The processing is strictly for real-time verification during the upload process.
+
 Usage & Behavioural Data
 • Swipe actions (likes, dislikes, super-likes) — used for match recommendations and improving the algorithm
 • In-app activity, session duration, feature interactions
@@ -79,7 +83,7 @@ Platform Safety (Legitimate interest)
 • Processing user reports and enforcing community guidelines
 
 Payments (Contractual necessity)
-• Processing Stellar subscription purchases via Razorpay
+• Processing Astro+ / AstroX subscription purchases via Razorpay
 • Managing subscription status, renewals, and cancellations
 
 Analytics & Improvement (Legitimate interest)
@@ -90,9 +94,9 @@ We will never sell your personal data to third parties.`,
   },
   {
     id: 'astro',
-    title: '4. Astrological API Usage',
+    title: '4. Third-Party AI & API Usage',
     icon: 'auto-awesome' as const,
-    content: `AstroDate uses third-party astrological computation services to generate your birth chart and compatibility scores. Specifically:
+    content: `AstroDate uses third-party AI and astrological computation services. Specifically:
 
 Data Shared with Astro APIs
 • Birth date, birth time, and birth place are transmitted to our astrological computation provider(s) solely for the purpose of generating chart data
@@ -108,10 +112,11 @@ Google Gemini (AI Icebreaker)
 • Only anonymised astrological attributes (signs, elements, compatibility notes) are sent — no names, photos, or identifying information
 • Gemini outputs are not used to train any model on your data
 
-Google Gemini (Photo Verification)
-• Profile photos you upload during onboarding are sent to a Supabase Edge Function which uses the Google Gemini Vision API to verify that the photo contains a real human face
-• The photo is processed in real time for verification purposes only and is not stored by Google or used for any other purpose
-• This processing occurs server-side; your photo is transmitted over an encrypted connection
+Google Gemini (Biometric/Face Verification)
+• Profile photos you upload are transmitted to Google's Gemini Vision API via a secure server-side connection to perform face detection and liveness verification.
+• We share this biometric-equivalent data (facial imagery) strictly for the purpose of ensuring platform safety and preventing fake profiles.
+• Google processes this imagery in real time and does not use your photos to train their foundational models. The data is discarded by the API after the verification check is complete.
+• This processing occurs entirely server-side; your photo is transmitted over an encrypted connection.
 
 You may request deletion of all computed astrological data by deleting your account (Settings → Delete Account).`,
   },
@@ -127,7 +132,7 @@ With Other Users
 
 With Service Providers (Data Processors)
 • Supabase — database, authentication, and real-time infrastructure (servers located in Singapore/US)
-• Razorpay — payment processing for Stellar subscriptions (PCI-DSS compliant)
+• Razorpay — payment processing for Astro+ / AstroX subscriptions (PCI-DSS compliant)
 • Expo — push notification delivery infrastructure
 • Google Gemini — AI-generated icebreaker suggestions (anonymised data only)
 • Astrological computation API — birth chart calculation (anonymised data only)

@@ -7,6 +7,9 @@
     "apk": {
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SENTRY_DSN": "$EXPO_PUBLIC_SENTRY_DSN"
       }
     },
     "production": {
@@ -16,6 +19,9 @@
       },
       "ios": {
         "buildConfiguration": "Release"
+      },
+      "env": {
+        "EXPO_PUBLIC_SENTRY_DSN": "$EXPO_PUBLIC_SENTRY_DSN"
       }
     }
   },

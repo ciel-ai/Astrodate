@@ -117,6 +117,7 @@ Deno.serve(async (req: Request) => {
       const payment = payload?.payload?.payment?.entity;
       const userId = paymentLink?.notes?.user_id;
       const planId = paymentLink?.notes?.plan_id;
+      const platform = paymentLink?.notes?.platform;
       const paymentLinkId = paymentLink?.id;
       const paymentId = payment?.id;
       const orderId = payment?.order_id ?? paymentLink?.order_id ?? null;
@@ -132,6 +133,12 @@ Deno.serve(async (req: Request) => {
         console.error('Missing userId, planId, paymentLinkId, or webhookEventId in webhook payload');
         // Still return 200 to Razorpay so it does not retry
         return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+
+      if (platform === 'ios') {
+        console.warn(`[iOS Guard] Blocked Razorpay webhook fulfillment for iOS user ${userId}.`);
+        // Return 200 so Razorpay doesn't retry, but we do NOT fulfill the subscription
+        return new Response(JSON.stringify({ status: 'ignored_ios_guard' }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
 
       const payloadHash = await sha256Hex(bodyText);

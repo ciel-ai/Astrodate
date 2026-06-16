@@ -36,13 +36,21 @@ let _rcConfigured = false;
 
 export async function ensureRevenueCatConfigured() {
   if (_rcConfigured) return; // prevent duplicate init
+  
+  if (Platform.OS !== 'ios') {
+    _rcConfigured = true;
+    return;
+  }
+
   if (!REVENUECAT_API_KEY_IOS) {
-    throw new Error('RevenueCat iOS API key is missing.');
+    console.warn('RevenueCat iOS API key is missing. Skipping configuration.');
+    _rcConfigured = true;
+    return;
   }
-  if (Platform.OS === 'ios') {
-    const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');
-    await requestTrackingPermissionsAsync();
-  }
+
+  const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');
+  await requestTrackingPermissionsAsync();
+  
   Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS });
   _rcConfigured = true;
 }
@@ -254,6 +262,16 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
             throw new Error('Purchase completed, but no active subscription was returned.');
           }
 
+          // Sync to Supabase DB immediately so feature gates reflect the purchase
+          // without waiting for the RevenueCat webhook.
+          const { error: syncError } = await supabase.rpc('sync_ios_subscription', {
+            entitlement_id: planSlug,
+          });
+          if (syncError) {
+            // Non-fatal: webhook will sync later. Log but don't fail the purchase.
+            console.warn('[useSubscriptionPayment] sync_ios_subscription error:', syncError.message);
+          }
+
           if (isMountedRef.current) {
             setPaymentStatus('active');
             setPaymentError(null);
@@ -278,7 +296,10 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
       if (Platform.OS === 'android') {
         try {
           if (isMountedRef.current) setPaymentStatus('creating');
-          const { paymentLinkId, shortUrl } = await createRazorpayPaymentLink(options);
+          const { paymentLinkId, shortUrl } = await createRazorpayPaymentLink({
+            ...options,
+            platform: Platform.OS,
+          });
           activePaymentLinkIdRef.current = paymentLinkId;
 
           const userId = options.userId;

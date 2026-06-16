@@ -87,7 +87,13 @@ export function MatchModal({
               {/* Current User Card (Left) */}
               <View style={[styles.matchProfileCard, styles.matchCardLeft, styles.planetarySphere]}>
                 <Image
-                  source={typeof currentUserPhoto === 'string' ? { uri: currentUserPhoto } : currentUserPhoto}
+                  source={
+                    currentUserPhoto?.thumbnail
+                      ? { uri: currentUserPhoto.thumbnail }
+                      : typeof currentUserPhoto === 'string'
+                      ? { uri: currentUserPhoto }
+                      : currentUserPhoto
+                  }
                   style={styles.matchProfileImage}
                   contentFit="cover"
                 />
@@ -97,7 +103,9 @@ export function MatchModal({
               <View style={[styles.matchProfileCard, styles.matchCardRight, styles.planetarySphere]}>
                 <Image
                   source={
-                    typeof matchedProfile?.image === 'string'
+                    matchedProfile?.photos?.[0]?.thumbnail
+                      ? { uri: matchedProfile.photos[0].thumbnail }
+                      : typeof matchedProfile?.image === 'string'
                       ? { uri: matchedProfile?.image }
                       : matchedProfile?.image
                   }

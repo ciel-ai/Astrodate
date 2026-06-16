@@ -12,7 +12,7 @@ export type Profile = {
   age?: number;
   location?: string;
   image: any;
-  photos?: { uri: string }[];
+  photos?: { uri: string; thumbnail?: string }[];
   compatibility?: number;
   indian_score?: number;
   western_score?: number;

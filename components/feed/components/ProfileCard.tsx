@@ -95,6 +95,7 @@ export function ProfileCard({
                 <View style={cardStyles.mockupPhotoContainerFull}>
                   <Image
                     source={resolvePhotoSource(profilePhotos[0])}
+                    placeholder={profilePhotos[0]?.thumbnail ? { uri: profilePhotos[0].thumbnail } : undefined}
                     style={cardStyles.mockupImage}
                     contentFit="cover"
                   />
@@ -233,7 +234,12 @@ export function ProfileCard({
 
                   {/* Photo 2 */}
                   <View style={cardStyles.mockupPhotoContainer}>
-                    <Image source={resolvePhotoSource(profilePhotos[1 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
+                    <Image 
+                      source={resolvePhotoSource(profilePhotos[1 % profilePhotos.length])} 
+                      placeholder={profilePhotos[1 % profilePhotos.length]?.thumbnail ? { uri: profilePhotos[1 % profilePhotos.length].thumbnail } : undefined}
+                      style={cardStyles.mockupImage} 
+                      contentFit="cover" 
+                    />
                   </View>
                   {/* Prompt 1 */}
                   <View style={cardStyles.mockupPromptCard}>
@@ -256,12 +262,22 @@ export function ProfileCard({
 
                   {/* Photo 3 */}
                   <View style={cardStyles.mockupPhotoContainer}>
-                    <Image source={resolvePhotoSource(profilePhotos[2 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
+                    <Image 
+                      source={resolvePhotoSource(profilePhotos[2 % profilePhotos.length])} 
+                      placeholder={profilePhotos[2 % profilePhotos.length]?.thumbnail ? { uri: profilePhotos[2 % profilePhotos.length].thumbnail } : undefined}
+                      style={cardStyles.mockupImage} 
+                      contentFit="cover" 
+                    />
                   </View>
 
                   {/* Photo 4 */}
                   <View style={cardStyles.mockupPhotoContainer}>
-                    <Image source={resolvePhotoSource(profilePhotos[3 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
+                    <Image 
+                      source={resolvePhotoSource(profilePhotos[3 % profilePhotos.length])} 
+                      placeholder={profilePhotos[3 % profilePhotos.length]?.thumbnail ? { uri: profilePhotos[3 % profilePhotos.length].thumbnail } : undefined}
+                      style={cardStyles.mockupImage} 
+                      contentFit="cover" 
+                    />
                   </View>
 
                   {/* Prompt 2 */}
@@ -285,7 +301,12 @@ export function ProfileCard({
 
                   {/* Photo 5 */}
                   <View style={cardStyles.mockupPhotoContainer}>
-                    <Image source={resolvePhotoSource(profilePhotos[4 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
+                    <Image 
+                      source={resolvePhotoSource(profilePhotos[4 % profilePhotos.length])} 
+                      placeholder={profilePhotos[4 % profilePhotos.length]?.thumbnail ? { uri: profilePhotos[4 % profilePhotos.length].thumbnail } : undefined}
+                      style={cardStyles.mockupImage} 
+                      contentFit="cover" 
+                    />
                   </View>
 
                   {/* Prompt 3 */}
@@ -309,7 +330,12 @@ export function ProfileCard({
 
                   {/* Photo 6 */}
                   <View style={cardStyles.mockupPhotoContainer}>
-                    <Image source={resolvePhotoSource(profilePhotos[5 % profilePhotos.length])} style={cardStyles.mockupImage} contentFit="cover" />
+                    <Image 
+                      source={resolvePhotoSource(profilePhotos[5 % profilePhotos.length])} 
+                      placeholder={profilePhotos[5 % profilePhotos.length]?.thumbnail ? { uri: profilePhotos[5 % profilePhotos.length].thumbnail } : undefined}
+                      style={cardStyles.mockupImage} 
+                      contentFit="cover" 
+                    />
                   </View>
                 </View>
 

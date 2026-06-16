@@ -4,6 +4,7 @@ export interface UserPhoto {
   id?: string;
   user_id: string;
   photo_url: string;
+  thumbnail_url?: string;
   storage_path: string;
   is_primary: boolean;
   display_order: number;
@@ -75,7 +76,7 @@ export const uploadPhotoToStorage = async (
   imageUri: string,
   userId: string,
   photoIndex: number
-): Promise<{ success: boolean; photoUrl?: string; storagePath?: string; error?: string }> => {
+): Promise<{ success: boolean; photoUrl?: string; thumbnailUrl?: string; storagePath?: string; error?: string }> => {
   try {
     console.log(`📸 Converting image ${photoIndex + 1} to base64...`);
     
@@ -131,20 +132,32 @@ export const uploadPhotoToStorage = async (
       };
     }
 
-    // Get signed URL for the uploaded photo
+    // Get signed URL for the uploaded photo with 800px transform
     const { data: signedData, error: signedError } = await supabase.storage
       .from('user-photos')
-      .createSignedUrl(storagePath, 60 * 60 * 24 * 365); // 1-year expiry
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 365, {
+        transform: { width: 800, quality: 80 }
+      }); // 1-year expiry
 
     if (signedError || !signedData?.signedUrl) {
       return { success: false, error: 'Failed to generate signed URL' };
     }
     const photoUrl = signedData.signedUrl;
 
+    // Get signed URL for the thumbnail with 400px transform
+    const { data: thumbData, error: thumbError } = await supabase.storage
+      .from('user-photos')
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 365, {
+        transform: { width: 400, quality: 80 }
+      });
+
+    const thumbnailUrl = thumbData?.signedUrl;
+
     console.log(`✅ Photo ${photoIndex + 1} uploaded successfully:`, photoUrl);
     return {
       success: true,
       photoUrl,
+      thumbnailUrl,
       storagePath,
     };
   } catch (error) {
@@ -164,15 +177,20 @@ export const uploadPhotoToStorage = async (
  */
 export const savePhotoMetadata = async (photo: Omit<UserPhoto, 'id' | 'created_at' | 'updated_at'>): Promise<PhotoUploadResult> => {
   try {
+    const insertPayload: Record<string, unknown> = {
+      user_id: photo.user_id,
+      photo_url: photo.photo_url,
+      storage_path: photo.storage_path,
+      is_primary: photo.is_primary,
+      display_order: photo.display_order,
+    };
+    if (photo.thumbnail_url !== undefined) {
+      insertPayload.thumbnail_url = photo.thumbnail_url;
+    }
+
     const { data, error } = await supabase
       .from('user_photos')
-      .insert({
-        user_id: photo.user_id,
-        photo_url: photo.photo_url,
-        storage_path: photo.storage_path,
-        is_primary: photo.is_primary,
-        display_order: photo.display_order,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
@@ -264,6 +282,7 @@ export const uploadUserPhotos = async (
       const metadataResult = await savePhotoMetadata({
         user_id: userId,
         photo_url: uploadResult.photoUrl,
+        thumbnail_url: uploadResult.thumbnailUrl,
         storage_path: uploadResult.storagePath,
         is_primary: isPrimary,
         display_order: displayOrder,
@@ -312,7 +331,7 @@ export const getUserPhotos = async (userId?: string) => {
     if (!targetUserId) {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error('❌ Could not get current user:', userError);
+        if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
         return { success: false, error: 'User not authenticated' };
       }
       targetUserId = user.id;

@@ -37,6 +37,7 @@ export default function SignupScreen() {
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const isMountedRef = useRef(true);
 
   useLayoutEffect(() => {
@@ -66,6 +67,10 @@ export default function SignupScreen() {
   }, []);
 
   const handleGenerateOTP = async () => {
+    if (!agreedToTerms) {
+      showAlert('Terms required', 'Please accept the Terms & Conditions and Privacy Policy to continue.');
+      return;
+    }
     if (!phoneNumber || phoneNumber.trim() === '') {
       showAlert('Phone number required', 'Please enter your phone number');
       return;
@@ -201,12 +206,27 @@ export default function SignupScreen() {
                 />
               </View>
 
+              {/* Terms Checkbox */}
+              <View style={styles.termsRow}>
+                <TouchableOpacity onPress={() => setAgreedToTerms(!agreedToTerms)} style={styles.checkboxContainer}>
+                  <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                    {agreedToTerms && <MaterialIcons name="check" size={14} color="#FFF" />}
+                  </View>
+                </TouchableOpacity>
+                <Text style={styles.termsTextCheckbox}>
+                  I agree to the{' '}
+                  <Text style={styles.termsLink} onPress={() => router.push('/terms')}>Terms</Text>
+                  {' '}and{' '}
+                  <Text style={styles.termsLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
+                </Text>
+              </View>
+
               {/* Continue Button */}
               <TouchableOpacity
                 onPress={handleGenerateOTP}
                 activeOpacity={0.85}
-                disabled={loading}
-                style={[styles.buttonWrapper, phoneNumber.length === 0 && styles.buttonDisabled]}
+                disabled={loading || !agreedToTerms}
+                style={[styles.buttonWrapper, (phoneNumber.length === 0 || !agreedToTerms) && styles.buttonDisabled]}
               >
                 <LinearGradient
                   colors={['#A855F7', '#6366F1']}
@@ -232,17 +252,7 @@ export default function SignupScreen() {
                 <View style={styles.secureLine} />
               </View>
 
-              {/* Terms and Privacy Policy Note */}
-              <Text style={styles.termsText}>
-                By signing up you agree to our{' '}
-                <Text style={styles.termsLink} onPress={() => router.push('/terms')}>
-                  Terms of Service
-                </Text>
-                {'\n'}and{' '}
-                <Text style={styles.termsLink} onPress={() => router.push('/privacy')}>
-                  Privacy Policy
-                </Text>
-              </Text>
+              {/* Terms and Privacy Policy Note (Replaced by Checkbox) */}
 
               {/* Login Option */}
               <View style={styles.loginRow}>
@@ -459,5 +469,36 @@ const styles = StyleSheet.create({
     color: '#A855F7',
     fontWeight: '600',
     fontSize: 13,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  checkboxContainer: {
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#A855F7',
+    borderColor: '#A855F7',
+  },
+  termsTextCheckbox: {
+    flex: 1,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

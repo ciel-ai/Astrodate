@@ -4,7 +4,7 @@ export type Profile = {
   age?: number;
   location?: string;
   image: any;
-  photos?: { uri: string }[];
+  photos?: { uri: string; thumbnail?: string }[];
   compatibility?: number;
   astrology_score?: number;
   personality_score?: number;

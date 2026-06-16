@@ -39,6 +39,7 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Discover',
+            tabBarAccessibilityLabel: 'Discover feed',
             tabBarIcon: ({ color }) => <MaterialIcons name="auto-awesome" size={28} color={color} />,
           }}
         />
@@ -48,6 +49,7 @@ export default function TabLayout() {
           name="cosmic"
           options={{
             title: 'Cosmic',
+            tabBarAccessibilityLabel: 'Cosmic standouts',
             tabBarIcon: ({ color }) => <MaterialIcons name="nights-stay" size={28} color={color} />,
           }}
         />
@@ -57,6 +59,7 @@ export default function TabLayout() {
           name="likes"
           options={{
             title: 'Likes',
+            tabBarAccessibilityLabel: 'Who likes you',
             tabBarIcon: ({ color }) => <MaterialIcons name="favorite" size={28} color={color} />,
           }}
         />
@@ -66,6 +69,7 @@ export default function TabLayout() {
           name="chats"
           options={{
             title: 'Chats',
+            tabBarAccessibilityLabel: 'Messages and chats',
             tabBarIcon: ({ color }) => <MaterialIcons name="chat-bubble" size={28} color={color} />,
           }}
         />
@@ -75,6 +79,7 @@ export default function TabLayout() {
           name="profile"
           options={{
             title: 'Profile',
+            tabBarAccessibilityLabel: 'Your profile settings',
             tabBarIcon: ({ color }) => <MaterialIcons name="person" size={28} color={color} />,
           }}
         />

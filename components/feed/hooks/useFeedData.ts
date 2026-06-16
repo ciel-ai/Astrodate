@@ -172,7 +172,12 @@ export function useFeedData() {
         const photosResult = await getUserPhotos();
         if (mounted && photosResult.success && photosResult.data) {
           const primary = photosResult.data.find((p: any) => p.is_primary) || photosResult.data[0];
-          if (primary?.photo_url && mounted) setCurrentUserPhoto({ uri: primary.photo_url });
+          if (primary?.photo_url && mounted) {
+            setCurrentUserPhoto({ 
+              uri: primary.photo_url, 
+              thumbnail: primary.thumbnail_url ?? undefined 
+            });
+          }
         }
       } catch (error) { console.error('Error fetching current user photo:', error); }
     })();
@@ -262,7 +267,7 @@ export function useFeedData() {
         supabase.from('user_prompts').select('*').in('user_id', userIds),
       ]);
 
-      const allPhotos: { user_id: string; photo_url: string; is_primary: boolean }[] = photosBatch.data || [];
+      const allPhotos: { user_id: string; photo_url: string; thumbnail_url?: string; is_primary: boolean }[] = photosBatch.data || [];
       const allAstro = astroBatch.data || [];
       const allSection1 = section1Batch.data || [];
       const allOnboarding = onboardingBatch.data || [];
@@ -283,8 +288,16 @@ export function useFeedData() {
 
         if (userPhotos.length > 0) {
           const primary = userPhotos.find(p => p.is_primary) || userPhotos[0];
-          if (primary?.photo_url) primaryPhoto = { uri: primary.photo_url };
-          photos = userPhotos.map(p => ({ uri: p.photo_url }));
+          if (primary?.photo_url) {
+            primaryPhoto = { 
+              uri: primary.photo_url, 
+              thumbnail: primary.thumbnail_url ?? undefined 
+            };
+          }
+          photos = userPhotos.map(p => ({ 
+            uri: p.photo_url, 
+            thumbnail: p.thumbnail_url ?? undefined 
+          }));
         }
 
         const rawPersonality = m.personality_score != null ? Number(m.personality_score) : undefined;
@@ -535,7 +548,10 @@ export function useFeedData() {
           if (photosResult.success && photosResult.data) {
             const primary = photosResult.data.find((p: any) => p.is_primary) || photosResult.data[0];
             if (primary?.photo_url) {
-              setCurrentUserPhoto({ uri: primary.photo_url });
+              setCurrentUserPhoto({ 
+                uri: primary.photo_url, 
+                thumbnail: primary.thumbnail_url ?? undefined 
+              });
             }
           }
         }

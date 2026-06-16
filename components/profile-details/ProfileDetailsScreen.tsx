@@ -619,7 +619,9 @@ export default function ProfileDetailsScreen() {
                 >
                   <Image
                     source={
-                      typeof currentUserPhoto === 'string'
+                      currentUserPhoto?.thumbnail
+                        ? { uri: currentUserPhoto.thumbnail }
+                        : typeof currentUserPhoto === 'string'
                         ? { uri: currentUserPhoto }
                         : currentUserPhoto
                     }
@@ -636,7 +638,9 @@ export default function ProfileDetailsScreen() {
                 >
                   <Image
                     source={
-                      typeof matchedProfile.image === 'string'
+                      matchedProfile?.photos?.[0]?.thumbnail
+                        ? { uri: matchedProfile.photos[0].thumbnail }
+                        : typeof matchedProfile.image === 'string'
                         ? { uri: matchedProfile.image }
                         : matchedProfile.image
                     }

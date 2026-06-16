@@ -156,8 +156,29 @@ export default function PhoneVerificationScreen() {
       }
 
       if (session && user) {
-        // Success - user is authenticated, navigate to main app
-        safeReplace('/(tabs)');
+        // Check if a profile exists — distinguishes returning users from new phone numbers
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('user_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (profile) {
+          safeReplace('/(tabs)');
+        } else {
+          // Auth user was created by Supabase but no account exists — clean up and redirect
+          await supabase.auth.signOut();
+          showAlert(
+            'No Account Found',
+            'This phone number is not registered. Please sign up first.',
+            [{ text: 'Sign Up', onPress: () => safeReplace('/onboarding/signup') }],
+          );
+          if (isMountedRef.current) {
+            isVerifyingRef.current = false;
+            setLoading(false);
+            setOtp(['', '', '', '', '', '']);
+          }
+        }
       } else {
         showAlert('Verification Failed', 'Session not created. Please try again.');
         if (isMountedRef.current) {

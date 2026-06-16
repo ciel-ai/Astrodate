@@ -692,7 +692,22 @@ export default function DiscoverScreen() {
             const isTop = reverseIdx === arr.length - 1;
             const index = isTop ? currentProfileIndex : currentProfileIndex + 1;
             return (
-              <View key={`${String(profile.id)}-${isTop ? 'top' : 'next'}`} style={isTop ? styles.currentProfileWrapper : styles.nextProfileWrapper}>
+              <View 
+                key={`${String(profile.id)}-${isTop ? 'top' : 'next'}`} 
+                style={isTop ? styles.currentProfileWrapper : styles.nextProfileWrapper}
+                accessibilityActions={isTop ? [
+                  { name: 'pass', label: 'Pass' },
+                  { name: 'like', label: 'Like' },
+                  { name: 'superlike', label: 'Super Like' }
+                ] : undefined}
+                onAccessibilityAction={isTop ? (event) => {
+                  switch (event.nativeEvent.actionName) {
+                    case 'pass': handleDislike(); break;
+                    case 'like': handleLike(); break;
+                    case 'superlike': handleSuperLike(); break;
+                  }
+                } : undefined}
+              >
                 {isTop ? (
                   <GestureDetector gesture={composedGesture}>
                     <Animated.View style={[swipeAnimatedStyle as any, frontAnimatedStyle]}>
@@ -1001,7 +1016,7 @@ export default function DiscoverScreen() {
           <View style={styles.upgradeSheetContainer}>
             <Text style={styles.upgradeSheetTitle}>⭐ Shooting Stars Used Up</Text>
             <Text style={styles.upgradeSheetMessage}>
-              You've used all your Shooting Stars. Upgrade to Stellar or Cosmic for more.
+              You've used all your Shooting Stars. Upgrade to Astro+ or AstroX for more.
             </Text>
             {superLikesRemaining !== null && superLikesRemaining < 999 && (
               <Text style={styles.upgradeSheetRemainingText}>

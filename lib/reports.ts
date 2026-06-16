@@ -34,7 +34,7 @@ export const createReport = async (
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('❌ Could not get current user:', userError);
+      if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
       return {
         success: false,
         error: 'User not authenticated',
@@ -140,7 +140,7 @@ export const getReportedUserIds = async (): Promise<{ success: boolean; data?: s
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error('❌ Could not get current user:', userError);
+      if (userError?.name !== 'AuthSessionMissingError' && userError?.message !== 'Auth session missing!') { console.error('❌ Could not get current user:', userError); }
       return {
         success: false,
         error: 'User not authenticated',

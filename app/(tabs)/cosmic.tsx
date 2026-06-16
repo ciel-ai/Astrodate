@@ -163,6 +163,7 @@ function CosmicCard({
         <View style={styles.cardImageContainer}>
           <Image
             source={profile.image}
+            placeholder={profile.image?.thumbnail ? { uri: profile.image.thumbnail } : undefined}
             style={styles.cardImage}
             contentFit="cover"
             transition={400}
@@ -200,7 +201,7 @@ export default function CosmicScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ElementFilter>('All');
-  const [isStellar, setIsStellar] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
   const headerFade = useRef(new Animated.Value(0)).current;
 
@@ -217,7 +218,7 @@ export default function CosmicScreen() {
 
       // Membership check
       const membership = await getMembershipOrFree();
-      setIsStellar(membership.is_active);
+      setIsSubscribed(membership.is_active);
 
       // Fetch standouts
       const standouts: Standout[] = await getStandouts(userId);
@@ -236,7 +237,7 @@ export default function CosmicScreen() {
           .in('user_id', userIds),
         supabase
           .from('user_photos')
-          .select('user_id, photo_url, is_primary')
+          .select('user_id, photo_url, thumbnail_url, is_primary')
           .in('user_id', userIds),
       ]);
 
@@ -262,7 +263,7 @@ export default function CosmicScreen() {
           astroScore: Math.round(s.astro_score * 100),
           westernSign: s.western_sign,
           dominantElement: s.dominant_element,
-          image: primary?.photo_url ? { uri: primary.photo_url } : PLACEHOLDER,
+          image: primary?.photo_url ? { uri: primary.photo_url, thumbnail: primary.thumbnail_url ?? undefined } : PLACEHOLDER,
         };
       });
 
@@ -286,6 +287,18 @@ export default function CosmicScreen() {
   }, []);
 
   useEffect(() => { fetchProfiles(); }, []);
+
+  // ── Analytics / Tracking Prompt ─────────────────────────────────────────────
+  useEffect(() => {
+    import('react-native').then(({ Platform }) => {
+      if (Platform.OS === 'ios') {
+        import('expo-tracking-transparency').then(({ requestTrackingPermissionsAsync }) => {
+          // Fire ATT contextually here after user has engaged with the app
+          requestTrackingPermissionsAsync().catch(console.warn);
+        });
+      }
+    });
+  }, []);
 
   // ── Filtered list ──────────────────────────────────────────────────────────
 
@@ -421,14 +434,14 @@ export default function CosmicScreen() {
             <Text style={styles.headerTitle}>🔮 Cosmic</Text>
             <Text style={styles.headerSubtitle}>Your highest astro matches</Text>
           </View>
-          {!isStellar && (
+          {!isSubscribed && (
             <TouchableOpacity
               style={styles.upgradeChip}
               onPress={() => router.push('/(tabs)/profile')}
               activeOpacity={0.8}
             >
               <MaterialIcons name="auto-awesome" size={12} color="#fbbf24" />
-              <Text style={styles.upgradeChipText}>Go Stellar</Text>
+              <Text style={styles.upgradeChipText}>Go Astro+</Text>
             </TouchableOpacity>
           )}
         </View>

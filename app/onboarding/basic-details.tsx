@@ -345,11 +345,39 @@ export default function BasicDetailsScreen() {
     }
   };
 
+  /**
+   * Extracts the Google email from the current Supabase user object.
+   */
+  const extractGoogleEmailFromUser = async (): Promise<string | null> => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) return null;
+    if (userData.user.email) return userData.user.email;
+    const googleIdentity = userData.user.identities?.find((id: any) => id.provider === 'google');
+    return googleIdentity?.identity_data?.email ?? null;
+  };
+
   const handleGoogleVerify = async () => {
     try {
       setIsLinkingGoogle(true);
+
+      // ── Pre-flight: if Google is already linked server-side, skip OAuth ──
+      // This happens when a previous attempt linked successfully in Supabase
+      // but the app lost local state (crash, re-mount, etc.)
+      const { data: preUser } = await supabase.auth.getUser();
+      const alreadyLinked = preUser?.user?.identities?.some((id: any) => id.provider === 'google');
+      if (alreadyLinked) {
+        const existingEmail = await extractGoogleEmailFromUser();
+        if (existingEmail) {
+          setEmail(existingEmail);
+          setErrors((prev) => ({ ...prev, email: '' }));
+          setStepIndex((prev) => prev + 1);
+          return;
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const redirectUrl = makeRedirectUri();
-      console.log('🔗 [auth] Starting Google link with redirect:', redirectUrl);
+      console.log('\U0001f517 [auth] Starting Google link with redirect:', redirectUrl);
       
       const { data, error } = await supabase.auth.linkIdentity({
         provider: 'google',
@@ -435,8 +463,25 @@ export default function BasicDetailsScreen() {
         }
       }
     } catch (err: any) {
-      console.error('Google link error:', err);
-      showAlert('Verification Failed', err.message || 'Could not connect Google. Please try again.');
+      // Defensive catch: "Identity is already linked" can still surface here in
+      // rare race conditions (pre-flight check passed but Supabase returned the
+      // error anyway). Treat it as success.
+      const msg: string = err?.message || '';
+      if (msg.includes('Identity is already linked') || msg.includes('identity_already_linked')) {
+        try {
+          const googleEmail = await extractGoogleEmailFromUser();
+          if (googleEmail) {
+            setEmail(googleEmail);
+            setErrors((prev) => ({ ...prev, email: '' }));
+            setStepIndex((prev) => prev + 1);
+            return;
+          }
+        } catch (_) {
+          // fall through to generic error
+        }
+      }
+      console.warn('Google link error:', err);
+      showAlert('Verification Failed', msg || 'Could not connect Google. Please try again.');
     } finally {
       if (isMountedRef.current) setIsLinkingGoogle(false);
     }
@@ -1042,5 +1087,3 @@ const GenderOptionItem = memo<GenderOptionItemProps>(({
     </View>
   );
 });
-
-
