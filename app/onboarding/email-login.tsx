@@ -39,6 +39,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 WebBrowser.maybeCompleteAuthSession();
 
+import * as Linking from 'expo-linking';
+
 export default function EmailLoginScreen() {
   const router = useRouter();
   const navigation: any = useNavigation();
@@ -149,12 +151,12 @@ export default function EmailLoginScreen() {
   const handleGoogleLogin = async () => {
     try {
       if (isMountedRef.current) setLoading(true);
-      const finalRedirectUri = makeRedirectUri({ native: 'astrodate://auth/callback' });
+      const finalRedirectUri = Linking.createURL('auth/callback');
       console.log('🔗 [email-login] Google OAuth redirect URI:', finalRedirectUri);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: finalRedirectUri, skipBrowserRedirect: false },
+        options: { redirectTo: finalRedirectUri },
       });
 
       if (error || !data?.url) {
@@ -163,20 +165,17 @@ export default function EmailLoginScreen() {
         return;
       }
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, finalRedirectUri, { showInRecents: true });
-      console.log('📱 [email-login] Google OAuth result:', result.type);
-
-      if (result.type === 'cancel') {
-        if (isMountedRef.current) setLoading(false);
-        return;
-      }
-
-      if (result.type === 'success' && result.url) {
+      const processLoginResult = async (url: string) => {
         try {
-          const urlObj = new URL(result.url);
-          const hashParams = new URLSearchParams(urlObj.hash.substring(1));
-          const accessToken = hashParams.get('access_token');
-          const refreshToken = hashParams.get('refresh_token');
+          const hashStr = url.split('#')[1] || '';
+          const pairs = hashStr.split('&');
+          let accessToken: string | null = null;
+          let refreshToken: string | null = null;
+          for (const pair of pairs) {
+            const [k, v] = pair.split('=');
+            if (k === 'access_token' && v) accessToken = decodeURIComponent(v);
+            if (k === 'refresh_token' && v) refreshToken = decodeURIComponent(v);
+          }
           if (accessToken && refreshToken) {
             const { data: sd, error: se } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
             if (!se && sd?.session?.user) {
@@ -202,11 +201,46 @@ export default function EmailLoginScreen() {
           }
         };
         oauthRetryRef.current = setTimeout(checkSession, 500);
+      };
+
+      if (Platform.OS === 'android') {
+        const linkingPromise = new Promise<string>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            sub.remove();
+            reject(new Error('Google sign-in timed out. Please try again.'));
+          }, 120_000);
+
+          const sub = Linking.addEventListener('url', ({ url }) => {
+            console.log(`[auth] Android deep link received:`, url);
+            if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
+              clearTimeout(timeout);
+              sub.remove();
+              resolve(url);
+            }
+          });
+        });
+
+        console.log(`[auth] Opening Google auth in default browser...`);
+        await Linking.openURL(data.url);
+        const authUrl = await linkingPromise;
+        await processLoginResult(authUrl);
       } else {
-        if (isMountedRef.current) setLoading(false);
+        const result = await WebBrowser.openAuthSessionAsync(data.url, finalRedirectUri, { showInRecents: true });
+        console.log('📱 [email-login] Google OAuth result:', result.type);
+
+        if (result.type === 'cancel') {
+          if (isMountedRef.current) setLoading(false);
+          return;
+        }
+
+        if (result.type === 'success' && result.url) {
+          await processLoginResult(result.url);
+        } else {
+          if (isMountedRef.current) setLoading(false);
+        }
       }
     } catch (err: any) {
-      console.error('❌ [email-login] Google OAuth exception:', err);
+      console.warn('⚠️ [email-login] Google OAuth exception:', err);
       showAlert('Google Login Error', err?.message ?? String(err));
       if (isMountedRef.current) setLoading(false);
     }
