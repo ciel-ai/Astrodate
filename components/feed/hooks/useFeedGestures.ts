@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { Dimensions } from 'react-native';
 import { Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
@@ -27,7 +28,7 @@ export interface UseFeedGesturesProps {
   resetCardPosition: () => void;
   // Action callbacks
   onSuperLike: () => void;
-  onSwipe: (direction: 'left' | 'right') => void;
+  onSwipe: (direction: 'left' | 'right' | 'up') => void;
   onPhotoTap: () => void;
   updateProfileIndex: () => void;
   setIsTransitioning: (val: boolean) => void;
@@ -81,10 +82,12 @@ export function useFeedGestures({
       }
     });
 
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+
   const panGesture = Gesture.Pan()
     .enabled(!isFlipped && !isTransitioning)
     .activeOffsetX([-20, 20])
-    .failOffsetY([-20, 20])
+    .failOffsetY([-300, 20])
     .onBegin(() => {
       'worklet';
       panStartX.value = translateX.value;
@@ -100,7 +103,20 @@ export function useFeedGestures({
     .onEnd((event) => {
       'worklet';
       const velocityX = event.velocityX;
-      const shouldDismiss = Math.abs(translateX.value) > 90 || Math.abs(velocityX) > 800; // SWIPE_THRESHOLD = 90
+
+      // Swipe-up gesture = super-like
+      const isSwipeUp = translateY.value < -120 && Math.abs(translateX.value) < 60;
+      if (isSwipeUp) {
+        runOnJS(setIsTransitioning)(true);
+        runOnJS(onSwipe)('up');
+        translateY.value = withTiming(-(SCREEN_HEIGHT + 120), { duration: 260 }, (finished) => {
+          if (finished) runOnJS(updateProfileIndex)();
+        });
+        opacity.value = withTiming(0, { duration: 200 });
+        return;
+      }
+
+      const shouldDismiss = Math.abs(translateX.value) > 90 || Math.abs(velocityX) > 800;
       if (shouldDismiss) {
         runOnJS(setIsTransitioning)(true);
         const direction = translateX.value !== 0 ? Math.sign(translateX.value) : Math.sign(velocityX || 1);

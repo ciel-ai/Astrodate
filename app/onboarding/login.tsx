@@ -236,19 +236,20 @@ export default function LoginScreen() {
       });
 
       if (error) throw error;
+      if (!data?.url) return;
 
-      if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      // Processes the callback URL once we have it (code or implicit token)
+      const processLoginUrl = async (url: string) => {
+        const parsed = Linking.parse(url);
+        let code = parsed.queryParams?.code as string | undefined;
 
-        if (result.type === 'success' && result.url) {
-          const parsed = Linking.parse(result.url);
-          let code = parsed.queryParams?.code;
-          
-          if (!code && result.url.includes('?')) {
-             const query = result.url.split('?')[1];
-             const params = new URLSearchParams(query);
-             code = params.get('code');
+        if (!code && url.includes('?')) {
+          const query = url.split('?')[1]?.split('#')[0] || '';
+          for (const pair of query.split('&')) {
+            const [k, v] = pair.split('=');
+            if (k === 'code' && v) { code = decodeURIComponent(v); break; }
           }
+        }
 
         if (code) {
           const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
@@ -279,8 +280,6 @@ export default function LoginScreen() {
       };
 
       if (Platform.OS === 'android') {
-        // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
-        // and shows a permanent white screen. Use the default browser instead.
         const linkingPromise = new Promise<string>((resolve, reject) => {
           const timeout = setTimeout(() => {
             sub.remove();
@@ -302,7 +301,6 @@ export default function LoginScreen() {
         const authUrl = await linkingPromise;
         await processLoginUrl(authUrl);
       } else {
-        // iOS: openAuthSessionAsync works correctly with SFSafariViewController
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log(`[auth] Browser result: ${result.type}`);
         if (result.type === 'success' && result.url) {
