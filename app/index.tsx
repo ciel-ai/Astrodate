@@ -1,10 +1,12 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -37,16 +39,26 @@ export default function SplashScreen() {
     }
   };
 
-  const checkUserAndNavigate = async (userId?: string) => {
+  const checkUserAndNavigate = async (userId?: string, email?: string) => {
     if (!userId) {
       router.replace('/onboarding/welcome');
       return;
     }
-    const { data: profile } = await supabase
+
+    let { data: profile } = await supabase
       .from('user_profiles')
       .select('user_id')
       .eq('user_id', userId)
       .maybeSingle();
+
+    if (!profile && email) {
+      const { data: profileByEmail } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .eq('email', email)
+        .maybeSingle();
+      profile = profileByEmail;
+    }
 
     if (profile) {
       router.replace('/(tabs)');
@@ -57,10 +69,37 @@ export default function SplashScreen() {
   };
 
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
+    if (isLoggingIn) return;
     if (!agreedToTerms) return;
     
     try {
       setIsLoggingIn(true);
+      
+      if (provider === 'apple' && Platform.OS === 'ios') {
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+        
+        if (credential.identityToken) {
+          const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
+            provider: 'apple',
+            token: credential.identityToken,
+          });
+          
+          if (error) throw error;
+          await checkUserAndNavigate(
+            sessionData.session?.user?.id,
+            sessionData.session?.user?.email
+          );
+          return;
+        } else {
+          throw new Error('No identity token returned from Apple.');
+        }
+      }
+
       const redirectUrl = makeRedirectUri();
       console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);
       
@@ -74,27 +113,34 @@ export default function SplashScreen() {
       if (error) throw error;
 
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
-        if (result.type === 'success' && result.url) {
-          const parsed = Linking.parse(result.url);
+        // Helper to process the OAuth callback URL
+        const processAuthUrl = async (url: string) => {
+          const parsed = Linking.parse(url);
           let code = parsed.queryParams?.code;
           
-          if (!code && result.url.includes('?')) {
-             const query = result.url.split('?')[1];
-             const params = new URLSearchParams(query);
-             code = params.get('code');
+          if (!code && url.includes('?')) {
+             const query = url.split('?')[1]?.split('#')[0] || '';
+             const pairs = query.split('&');
+             for (const pair of pairs) {
+               const [k, v] = pair.split('=');
+               if (k === 'code' && v) { code = decodeURIComponent(v); break; }
+             }
           }
 
           if (code) {
              const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
              if (sessionError) throw sessionError;
              await checkUserAndNavigate(sessionData.session?.user?.id);
-          } else if (result.url.includes('#access_token')) {
-             const hash = result.url.split('#')[1];
-             const params = new URLSearchParams(hash);
-             const access_token = params.get('access_token');
-             const refresh_token = params.get('refresh_token');
+          } else if (url.includes('#access_token')) {
+             const hash = url.split('#')[1] || '';
+             const pairs = hash.split('&');
+             let access_token: string | null = null;
+             let refresh_token: string | null = null;
+             for (const pair of pairs) {
+               const [k, v] = pair.split('=');
+               if (k === 'access_token' && v) access_token = decodeURIComponent(v);
+               if (k === 'refresh_token' && v) refresh_token = decodeURIComponent(v);
+             }
              
              if (access_token && refresh_token) {
                const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
@@ -105,6 +151,38 @@ export default function SplashScreen() {
           } else {
             // Unhandled URL format, fallback to onboarding
             router.replace('/onboarding/welcome');
+          }
+        };
+
+        if (Platform.OS === 'android') {
+          // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
+          // and shows a permanent white screen. Use the default browser instead.
+          const linkingPromise = new Promise<string>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              sub.remove();
+              reject(new Error('Google sign-in timed out. Please try again.'));
+            }, 120_000);
+
+            const sub = Linking.addEventListener('url', ({ url }) => {
+              console.log(`[auth] Android deep link received:`, url);
+              if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
+                clearTimeout(timeout);
+                sub.remove();
+                resolve(url);
+              }
+            });
+          });
+
+          console.log(`[auth] Opening Google auth in default browser...`);
+          await Linking.openURL(data.url);
+          const authUrl = await linkingPromise;
+          await processAuthUrl(authUrl);
+        } else {
+          // iOS: openAuthSessionAsync works correctly with SFSafariViewController
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          console.log(`[auth] Browser result: ${result.type}`);
+          if (result.type === 'success' && result.url) {
+            await processAuthUrl(result.url);
           }
         }
       }
@@ -174,23 +252,40 @@ export default function SplashScreen() {
         </View>
 
         <View style={styles.authButtonsContainer}>
-          <TouchableOpacity 
-            style={[styles.socialButton, styles.appleButton, (!agreedToTerms || isLoggingIn) && styles.buttonDisabled]} 
-            onPress={() => handleSocialLogin('apple')}
-            activeOpacity={agreedToTerms ? 0.8 : 1}
-            disabled={!agreedToTerms || isLoggingIn}
-          >
-            {isLoggingIn ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
-                <Text style={styles.appleButtonText}>
-                  Continue with Apple
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {Platform.OS === 'ios' ? (
+            <View style={{ width: '100%', pointerEvents: (isLoggingIn || !agreedToTerms) ? 'none' : 'auto', opacity: (!agreedToTerms || isLoggingIn) ? 0.5 : 1 }}>
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={25}
+                style={{ width: '100%', height: 50 }}
+                onPress={() => handleSocialLogin('apple')}
+              />
+              {isLoggingIn && (
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' }]}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                </View>
+              )}
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.socialButton, styles.appleButton, (!agreedToTerms || isLoggingIn) && styles.buttonDisabled]} 
+              onPress={() => handleSocialLogin('apple')}
+              activeOpacity={agreedToTerms ? 0.8 : 1}
+              disabled={!agreedToTerms || isLoggingIn}
+            >
+              {isLoggingIn ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
+                  <Text style={styles.appleButtonText}>
+                    Continue with Apple
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity 
             style={[styles.socialButton, styles.googleButton, (!agreedToTerms || isLoggingIn) && styles.buttonDisabled]} 

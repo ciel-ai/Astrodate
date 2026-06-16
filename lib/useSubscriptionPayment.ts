@@ -43,9 +43,7 @@ export async function ensureRevenueCatConfigured() {
   }
 
   if (!REVENUECAT_API_KEY_IOS) {
-    console.warn('RevenueCat iOS API key is missing. Skipping configuration.');
-    _rcConfigured = true;
-    return;
+    throw new Error('RevenueCat iOS API key is missing.');
   }
 
   const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');

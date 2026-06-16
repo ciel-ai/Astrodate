@@ -4,6 +4,39 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ykgbfrpkumlnogjdgqgb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c4jMZioQMqyhnh8tDdnYNA_KI8eW5_q",
+        "GEMINI_API_KEY": "REDACTED_GEMINI_KEY",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SiTtvf6OylKEiG",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD4kk8ARm1dVqlWEa3vAGWaaSvAASlUsb4",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "PASTE_AUTH_DOMAIN",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "astrodate-app-1ea78.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "astrodate-app-1ea78.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "417971189397",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:417971189397:web:fdf0fb2cffa2a09d724d9c",
+        "EXPO_PUBLIC_EMAIL_REDIRECT_URL": "astrodate://auth/verify"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ykgbfrpkumlnogjdgqgb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c4jMZioQMqyhnh8tDdnYNA_KI8eW5_q",
+        "GEMINI_API_KEY": "REDACTED_GEMINI_KEY",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SiTtvf6OylKEiG",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD4kk8ARm1dVqlWEa3vAGWaaSvAASlUsb4",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "PASTE_AUTH_DOMAIN",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "astrodate-app-1ea78.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "astrodate-app-1ea78.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "417971189397",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:417971189397:web:fdf0fb2cffa2a09d724d9c",
+        "EXPO_PUBLIC_EMAIL_REDIRECT_URL": "astrodate://auth/verify"
+      }
+    },
     "apk": {
       "android": {
         "buildType": "apk"
@@ -19,9 +52,6 @@
       },
       "ios": {
         "buildConfiguration": "Release"
-      },
-      "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "$EXPO_PUBLIC_SENTRY_DSN"
       }
     }
   },
