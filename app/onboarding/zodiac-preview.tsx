@@ -192,6 +192,7 @@ export default function ZodiacPreviewScreen() {
   const navigation = useNavigation();
   const params = useLocalSearchParams();
   const [isSaving, setIsSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
   const [selectedZodiacType, setSelectedZodiacType] = useState<'vedic' | 'western' | 'nakshatra'>('vedic');
   const { showAlert } = useAuthAlert();
   
@@ -338,6 +339,7 @@ export default function ZodiacPreviewScreen() {
 
 
   const handleContinue = async () => {
+    if (hasSaved) return;
     setIsSaving(true);
     try {
       // Format the data for saving
@@ -371,7 +373,8 @@ export default function ZodiacPreviewScreen() {
         return;
       }
 
-      console.log('✅ Astro details saved successfully');
+      console.log('✨ Astro details saved successfully');
+      setHasSaved(true);
       const savedUserId = result.data?.user_id;
       if (savedUserId) {
         enqueueSynastryPrewarm(savedUserId);

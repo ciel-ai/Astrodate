@@ -82,7 +82,7 @@ export const getCompatibilitySubScores = (profile: Profile) => {
   
   if (!baseScore) {
     // Generate a stable pseudo-random number between 75 and 98 based on the profile ID
-    const idHash = profile.id ? profile.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 85;
+    const idHash = profile.id ? String(profile.id).split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 85;
     baseScore = 75 + (idHash % 24);
   }
   

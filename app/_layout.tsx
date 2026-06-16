@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { resetGlobalTypingChannel } from '@/lib/typing-status';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -154,6 +155,15 @@ export default function RootLayout() {
           return;
         }
 
+        // Verify with server that user actually exists (avows stale/deleted user sessions)
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.warn('[Layout] Session validation failed (user may be deleted):', userError?.message);
+          await supabase.auth.signOut();
+          finishBoot('/onboarding/welcome');
+          return;
+        }
+
         syncPushTokenForCurrentUser().catch((error) => {
           console.warn('[Layout] push token sync non-fatal error:', error);
         });
@@ -270,6 +280,11 @@ export default function RootLayout() {
     // Warm-start: link opened while app was running
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       console.log('🔗 [Layout] Incoming URL (warm):', url);
+      // On Android, Chrome Custom Tab shows a blank white page when it redirects
+      // to a custom scheme (exp:// or astrodate://). Calling maybeCompleteAuthSession()
+      // here signals any waiting openAuthSessionAsync to close the tab and return
+      // the redirect URL as a successful result.
+      WebBrowser.maybeCompleteAuthSession();
       processVerifyLink(url);
     });
 
@@ -414,6 +429,7 @@ export default function RootLayout() {
               <Stack.Screen name="onboarding/email-login" options={{ headerShown: false }} />
               <Stack.Screen name="onboarding/email-verify-pending" options={{ headerShown: false }} />
               <Stack.Screen name="auth/verify" options={{ headerShown: false }} />
+              <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
               <Stack.Screen name="chat/[id]/index" options={{ headerShown: false, animation: 'slide_from_right' }} />
               <Stack.Screen name="chatbot" options={{ headerShown: false }} />
               <Stack.Screen name="filters" options={{ headerShown: false }} />
