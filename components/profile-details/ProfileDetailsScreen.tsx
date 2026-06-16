@@ -461,11 +461,13 @@ export default function ProfileDetailsScreen() {
               <ProfileHero
                 name={profile.name}
                 age={profile.age}
+                location={profile.location}
                 image={profile.image}
                 photos={profile.photos}
                 isSuperlikedByProfile={isSuperlikedByProfile}
                 currentImageIndex={currentImageIndex}
                 onPhotoTap={handlePhotoTap}
+                compatibility={getCompatibilitySubScores(profile).overall}
               />
               
               {/* Withdraw Button positioned at top right over the hero image */}

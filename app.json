@@ -142,7 +142,8 @@
         {
           "userTrackingPermission": "We use your device identifier to measure app performance and improve your recommendations."
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true,
