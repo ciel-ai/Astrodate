@@ -13,6 +13,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 
 WebBrowser.maybeCompleteAuthSession();
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -115,54 +116,118 @@ export default function LoginScreen() {
     }
   };
 
-  const checkUserAndNavigate = async (userId?: string) => {
+  const checkUserAndNavigate = async (userId?: string, email?: string, appleFullName?: string) => {
     if (!userId) {
       router.replace('/onboarding/welcome');
       return;
     }
-    const { data: profile } = await supabase
+
+    // Check 1 — profile matched by Supabase user_id (already linked or phone user)
+    const { data: profileByUserId } = await supabase
       .from('user_profiles')
       .select('user_id')
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (profile) {
+    if (profileByUserId) {
       router.replace('/(tabs)');
-    } else {
+      return;
+    }
+
+    // Check 2 — profile matched by email (existing phone user, Apple not yet linked)
+    let profileByEmail = null;
+    if (email) {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .eq('email', email)
+        .maybeSingle();
+      profileByEmail = data;
+    }
+
+    if (profileByEmail) {
+      // Email belongs to a phone-signup account — session user_id would be wrong if we let them in
       await supabase.auth.signOut();
-      alert('This email is not registered. Please sign up using your phone number first.');
+      showAlert(
+        'Account Not Linked',
+        'This Apple ID is not linked to any account. Log in with your phone number, then go to Settings → Linked Accounts to connect your Apple ID.',
+        [
+          { text: 'Log in with Phone', onPress: () => router.replace('/onboarding/login') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    // Check 3 — no profile anywhere
+    if (email) {
+      // Apple provided an email (first-ever sign-in) and no account exists → new user → onboard
+      router.replace({
+        pathname: '/onboarding/basic-details',
+        params: {
+          ...(appleFullName ? { prefillName: appleFullName } : {}),
+          prefillEmail: email,
+        },
+      });
+    } else {
+      // No email (Apple withholds it after first sign-in) and no profile → cannot identify user
+      await supabase.auth.signOut();
+      showAlert(
+        'Account Not Found',
+        'Could not find an account for this Apple ID. Please sign up with your phone number first.',
+        [
+          { text: 'Sign Up', onPress: () => router.replace('/onboarding/signup') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
     }
   };
 
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
+    if (isLoggingIn) return;
     try {
       setIsLoggingIn(true);
       
       if (provider === 'apple' && Platform.OS === 'ios') {
+        // Generate nonce — Apple receives the SHA-256 hash, Supabase receives the raw value
+        const rawNonce = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+        const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+
         const credential = await AppleAuthentication.signInAsync({
           requestedScopes: [
             AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
             AppleAuthentication.AppleAuthenticationScope.EMAIL,
           ],
+          nonce: hashedNonce,
         });
-        
+
+        // Apple sends fullName and email only on the FIRST sign-in ever — capture immediately
+        const appleFullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+          .filter(Boolean).join(' ') || undefined;
+        const appleEmail = credential.email ?? undefined;
+
         if (credential.identityToken) {
           const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
             provider: 'apple',
             token: credential.identityToken,
+            nonce: rawNonce,
           });
-          
+
           if (error) throw error;
-          await checkUserAndNavigate(sessionData.session?.user?.id);
+          await checkUserAndNavigate(
+            sessionData.session?.user?.id,
+            sessionData.session?.user?.email ?? appleEmail,
+            appleFullName,
+          );
           return;
         } else {
           throw new Error('No identity token returned from Apple.');
         }
       }
 
-      const redirectUrl = makeRedirectUri();
+      const redirectUrl = Linking.createURL('auth/callback');
       console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);
-      
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -171,44 +236,84 @@ export default function LoginScreen() {
       });
 
       if (error) throw error;
+      if (!data?.url) return;
 
-      if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      // Processes the callback URL once we have it (code or implicit token)
+      const processLoginUrl = async (url: string) => {
+        const parsed = Linking.parse(url);
+        let code = parsed.queryParams?.code as string | undefined;
 
-        if (result.type === 'success' && result.url) {
-          const parsed = Linking.parse(result.url);
-          let code = parsed.queryParams?.code;
-          
-          if (!code && result.url.includes('?')) {
-             const query = result.url.split('?')[1];
-             const params = new URLSearchParams(query);
-             code = params.get('code');
+        if (!code && url.includes('?')) {
+          const query = url.split('?')[1]?.split('#')[0] || '';
+          for (const pair of query.split('&')) {
+            const [k, v] = pair.split('=');
+            if (k === 'code' && v) { code = decodeURIComponent(v); break; }
           }
+        }
 
-          if (code) {
-             const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
-             if (sessionError) throw sessionError;
-             await checkUserAndNavigate(sessionData.session?.user?.id);
-          } else if (result.url.includes('#access_token')) {
-             const hash = result.url.split('#')[1];
-             const params = new URLSearchParams(hash);
-             const access_token = params.get('access_token');
-             const refresh_token = params.get('refresh_token');
-             
-             if (access_token && refresh_token) {
-               const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
-               await checkUserAndNavigate(sessionData.session?.user?.id);
-             } else {
-               router.replace('/onboarding/welcome');
-             }
+        if (code) {
+          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+          if (sessionError) throw sessionError;
+          await checkUserAndNavigate(sessionData.session?.user?.id);
+          return;
+        }
+
+        if (url.includes('#access_token')) {
+          const hash = url.split('#')[1] || '';
+          let access_token: string | null = null;
+          let refresh_token: string | null = null;
+          for (const pair of hash.split('&')) {
+            const [k, v] = pair.split('=');
+            if (k === 'access_token' && v) access_token = decodeURIComponent(v);
+            if (k === 'refresh_token' && v) refresh_token = decodeURIComponent(v);
+          }
+          if (access_token && refresh_token) {
+            const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
+            await checkUserAndNavigate(sessionData.session?.user?.id);
           } else {
             router.replace('/onboarding/welcome');
           }
+          return;
+        }
+
+        router.replace('/onboarding/welcome');
+      };
+
+      if (Platform.OS === 'android') {
+        // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
+        // and shows a permanent white screen. Use the default browser instead.
+        const linkingPromise = new Promise<string>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            sub.remove();
+            reject(new Error('Google sign-in timed out. Please try again.'));
+          }, 120_000);
+
+          const sub = Linking.addEventListener('url', ({ url }) => {
+            console.log(`[auth] Android deep link received:`, url);
+            if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
+              clearTimeout(timeout);
+              sub.remove();
+              resolve(url);
+            }
+          });
+        });
+
+        console.log(`[auth] Opening Google auth in default browser...`);
+        await Linking.openURL(data.url);
+        const authUrl = await linkingPromise;
+        await processLoginUrl(authUrl);
+      } else {
+        // iOS: openAuthSessionAsync works correctly with SFSafariViewController
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log(`[auth] Browser result: ${result.type}`);
+        if (result.type === 'success' && result.url) {
+          await processLoginUrl(result.url);
         }
       }
-    } catch (err) {
-      console.error('Social login error:', err);
-      showAlert('Login error', 'Social login failed. Please try again.');
+    } catch (err: any) {
+      if (err?.code === 'ERR_REQUEST_CANCELED') return; // user dismissed Apple sheet — silent
+      console.warn('⚠️ Social login error:', err);
+      showAlert('Login error', err?.message ?? 'Social login failed. Please try again.');
     } finally {
       if (isMountedRef.current) setIsLoggingIn(false);
     }
@@ -326,20 +431,37 @@ export default function LoginScreen() {
 
               {/* Social Login Buttons */}
               <View style={styles.authButtonsContainer}>
-                <TouchableOpacity 
-                  style={[styles.socialButton, styles.appleButton, isLoggingIn && styles.buttonDisabled]} 
-                  onPress={() => handleSocialLogin('apple')}
-                  disabled={isLoggingIn}
-                >
-                  {isLoggingIn ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="logo-apple" size={18} color="#FFFFFF" style={styles.socialIcon} />
-                      <Text style={styles.appleButtonText}>Continue with Apple</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                {Platform.OS === 'ios' ? (
+                  <View style={{ width: '100%', pointerEvents: isLoggingIn ? 'none' : 'auto', opacity: isLoggingIn ? 0.5 : 1 }}>
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                      cornerRadius={25}
+                      style={{ width: '100%', height: 50 }}
+                      onPress={() => handleSocialLogin('apple')}
+                    />
+                    {isLoggingIn && (
+                      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' }]}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={[styles.socialButton, styles.appleButton, isLoggingIn && styles.buttonDisabled]} 
+                    onPress={() => handleSocialLogin('apple')}
+                    disabled={isLoggingIn}
+                  >
+                    {isLoggingIn ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-apple" size={18} color="#FFFFFF" style={styles.socialIcon} />
+                        <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity 
                   style={[styles.socialButton, styles.googleButton, isLoggingIn && styles.buttonDisabled]} 

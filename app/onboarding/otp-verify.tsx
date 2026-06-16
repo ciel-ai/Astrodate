@@ -129,7 +129,7 @@ export default function OTPVerifyScreen() {
 
       if (error) {
         // Log error for debugging (not shown to user)
-        console.error('OTP verification error:', error);
+        console.warn('⚠️ OTP verification error:', error);
 
         // Show user-friendly alert message
         let errorMessage = 'Invalid OTP. Please check the code and try again.';
@@ -205,7 +205,7 @@ export default function OTPVerifyScreen() {
       }
     } catch (err: any) {
       // Log error for debugging (not shown to user)
-      console.error('OTP verification exception:', err);
+      console.warn('⚠️ OTP verification exception:', err);
       showAlert('Verification Failed', 'An error occurred. Please try again.');
       if (isMountedRef.current) {
         setOtp(['', '', '', '', '', '']);
@@ -236,7 +236,7 @@ export default function OTPVerifyScreen() {
       });
 
       if (error) {
-        console.error('OTP resend error:', error);
+        console.warn('⚠️ OTP resend error:', error);
         showAlert('Resend Failed', error.message || 'Could not resend OTP. Please try again.');
         setLoading(false);
         return;
@@ -247,7 +247,7 @@ export default function OTPVerifyScreen() {
       inputRefs.current[0]?.focus();
       showAlert('OTP Resent', 'A new OTP has been sent to your phone number');
     } catch (err: any) {
-      console.error('OTP resend exception:', err);
+      console.warn('⚠️ OTP resend exception:', err);
       showAlert('Resend Failed', err?.message || 'Could not resend OTP. Please try again.');
     } finally {
       if (isMountedRef.current) {
