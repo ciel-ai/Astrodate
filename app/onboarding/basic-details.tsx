@@ -5,11 +5,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/lib/supabase';
+import { supabase, SUPABASE_URL } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -119,12 +120,10 @@ export default function BasicDetailsScreen() {
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [thanksVisible, setThanksVisible] = useState(false);
+  const [showManualEmail, setShowManualEmail] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
-  const [emailOtp, setEmailOtp] = useState('');
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
   const isMountedRef = React.useRef(true);
   const { showAlert } = useAuthAlert();
 
@@ -348,102 +347,143 @@ export default function BasicDetailsScreen() {
   const handleSocialVerify = async (provider: 'google' | 'apple') => {
     try {
       setIsLinkingGoogle(true);
-      const redirectUrl = makeRedirectUri();
+
+      if (provider === 'apple' && Platform.OS === 'ios') {
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+
+        if (credential.identityToken) {
+          try {
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+            if (currentSession?.access_token) {
+              const res = await fetch(`${SUPABASE_URL}/functions/v1/link-apple-identity`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${currentSession.access_token}`,
+                },
+                body: JSON.stringify({ apple_identity_token: credential.identityToken }),
+              });
+              if (!res.ok) {
+                const json = await res.json().catch(() => ({}));
+                console.warn('Apple identity link failed (non-blocking):', json.error);
+              }
+            }
+          } catch (linkErr) {
+            console.warn('Apple identity linking error (non-blocking):', linkErr);
+          }
+        }
+
+        let foundEmail = credential.email;
+        if (!foundEmail) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          foundEmail = sessionData?.session?.user?.email;
+        }
+
+        if (foundEmail) {
+          setEmail(foundEmail);
+          setErrors((prev) => ({ ...prev, email: '' }));
+          setStepIndex((prev) => prev + 1);
+        } else {
+          setShowManualEmail(true);
+        }
+        return;
+      }
+
+      // Use Linking.createURL so that in Expo Go it redirects to exp://192.168.x.x:8081/--/auth/callback,
+      // and in dev clients/production builds it redirects to astrodate://auth/callback
+      const redirectUrl = Linking.createURL('auth/callback');
       console.log(`🔗 [auth] Starting ${provider} link with redirect:`, redirectUrl);
-      
+
       const { data, error } = await supabase.auth.linkIdentity({
         provider,
         options: {
           redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
         },
       });
 
       if (error) throw error;
+      if (!data?.url) return;
 
-      if (data?.url) {
+      // Extracts email from the OAuth callback URL (code or implicit token flow)
+      const processAuthUrl = async (url: string) => {
+        console.log(`[auth] Processing auth URL for ${provider}:`, url);
+
+        if (url.includes('error=')) {
+          let errorDesc: string | null = null;
+          const hashOrQuery = url.includes('#') ? url.split('#')[1] : url.split('?')[1] || '';
+          for (const pair of hashOrQuery.split('&')) {
+            const [k, v] = pair.split('=');
+            if ((k === 'error_description' || k === 'error') && v) { errorDesc = decodeURIComponent(v); break; }
+          }
+          if (errorDesc) throw new Error(errorDesc);
+        }
+
+        // The linking was already handled on the Supabase server before redirecting back.
+        // We just fetch the updated user to get the linked identity/email.
+        console.log(`[auth] Fetching user to verify linked identity...`);
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+
+        let linkedEmail = userData?.user?.email;
+        if (userData?.user?.identities) {
+          const pi = userData.user.identities.find(id => id.provider === provider);
+          if (pi?.identity_data?.email) {
+            linkedEmail = pi.identity_data.email;
+          }
+        }
+
+        if (linkedEmail && isMountedRef.current) {
+          console.log(`[auth] Got email from linked identity:`, linkedEmail);
+          setEmail(linkedEmail);
+          setErrors((prev) => ({ ...prev, email: '' }));
+          setStepIndex((prev) => prev + 1);
+        } else {
+          throw new Error(`Could not find email in your linked ${provider} account.`);
+        }
+      };
+
+      if (Platform.OS === 'android') {
+        const linkingPromise = new Promise<string>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            sub.remove();
+            reject(new Error('Google sign-in timed out. Please try again.'));
+          }, 120_000);
+
+          const sub = Linking.addEventListener('url', ({ url }) => {
+            console.log(`[auth] Android deep link received:`, url);
+            if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
+              clearTimeout(timeout);
+              sub.remove();
+              resolve(url);
+            }
+          });
+        });
+
+        console.log(`[auth] Opening Google auth in default browser...`);
+        await Linking.openURL(data.url);
+        const authUrl = await linkingPromise;
+        await processAuthUrl(authUrl);
+      } else {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
+        console.log(`[auth] Browser result: ${result.type}`);
         if (result.type === 'success' && result.url) {
-          const parsed = Linking.parse(result.url);
-          let code = parsed.queryParams?.code;
-          
-          console.log(`[auth] Success URL:`, result.url);
-          
-          if (!code && result.url.includes('?code=')) {
-            const urlObj = new URL(result.url);
-            code = urlObj.searchParams.get('code');
-          } else if (!code && result.url.includes('#code=')) {
-            const hash = result.url.split('#')[1];
-            const params = new URLSearchParams(hash);
-            code = params.get('code');
-          }
-
-          if (code) {
-             console.log(`[auth] Got code, exchanging for session...`);
-             const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
-             if (sessionError) throw sessionError;
-             
-             // Fetch updated user to get their Google email
-             const { data: userData } = await supabase.auth.getUser();
-             let googleEmail = userData?.user?.email;
-             if (!googleEmail && userData?.user?.identities) {
-               const providerIdentity = userData.user.identities.find(id => id.provider === provider);
-               if (providerIdentity?.identity_data?.email) {
-                 googleEmail = providerIdentity.identity_data.email;
-               }
-             }
-
-             if (googleEmail) {
-               console.log(`[auth] Successfully extracted email:`, googleEmail);
-               setEmail(googleEmail);
-               setErrors((prev) => ({ ...prev, email: '' }));
-               setStepIndex((prev) => prev + 1); // Automatically proceed!
-             } else {
-               throw new Error(`Could not find email address in your ${provider} account.`);
-             }
-          } else if (result.url.includes('#error=')) {
-             const hash = result.url.split('#')[1];
-             const params = new URLSearchParams(hash);
-             const errorDesc = params.get('error_description') || params.get('error');
-             console.log(`[auth] Error in URL hash:`, errorDesc);
-             if (errorDesc) throw new Error(errorDesc);
-          } else if (result.url.includes('#access_token')) {
-             console.log(`[auth] Found access_token in URL hash`);
-             const hash = result.url.split('#')[1];
-             const params = new URLSearchParams(hash);
-             const access_token = params.get('access_token');
-             const refresh_token = params.get('refresh_token');
-             
-             if (access_token && refresh_token) {
-               await supabase.auth.setSession({ access_token, refresh_token });
-               
-               // Fetch updated user to get their Google email
-               const { data: userData } = await supabase.auth.getUser();
-               let googleEmail = userData?.user?.email;
-               if (!googleEmail && userData?.user?.identities) {
-                 const providerIdentity = userData.user.identities.find(id => id.provider === provider);
-                 if (providerIdentity?.identity_data?.email) {
-                   googleEmail = providerIdentity.identity_data.email;
-                 }
-               }
-
-               if (googleEmail) {
-                 console.log(`[auth] Successfully extracted email from implicit flow:`, googleEmail);
-                 setEmail(googleEmail);
-                 setErrors((prev) => ({ ...prev, email: '' }));
-                 setStepIndex((prev) => prev + 1); // Automatically proceed!
-               } else {
-                 throw new Error(`Could not find email address in your ${provider} account.`);
-               }
-             }
-          } else {
-             console.log(`[auth] Result URL did not contain code or access_token:`, result.url);
-          }
+          await processAuthUrl(result.url);
         }
       }
     } catch (err: any) {
-      console.error(`${provider} link error:`, err);
-      showAlert('Verification Failed', err.message || `Could not connect ${provider}. Please try again.`);
+      console.warn(`⚠️ ${provider} link error:`, err);
+      if (err?.message?.includes('sub claim in JWT') || err?.message?.includes('does not exist')) {
+        await supabase.auth.signOut();
+        showAlert('Session Expired', 'Your session has expired or is invalid. Please log in again.');
+      } else {
+        showAlert('Verification Failed', err.message || `Could not connect ${provider}. Please try again.`);
+      }
     } finally {
       if (isMountedRef.current) setIsLinkingGoogle(false);
     }
@@ -529,7 +569,23 @@ export default function BasicDetailsScreen() {
     if (currentStep.id === 'email') {
       return (
         <View style={styles.inputWrapper}>
-          {email ? (
+          {showManualEmail ? (
+            <>
+              <Text style={styles.helperText}>Please enter your email manually.</Text>
+              <TextInput
+                style={[styles.textInput, errors.email && styles.textInputError, { marginTop: 12 }]}
+                placeholder="you@example.com"
+                placeholderTextColor="rgba(107, 114, 128, 0.7)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setErrors((prev) => ({ ...prev, email: '' }));
+                }}
+              />
+            </>
+          ) : email ? (
             <View style={{ alignItems: 'center', paddingVertical: 20 }}>
               <MaterialIcons name="check-circle" size={48} color={COLORS.success} />
               <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginTop: 12 }}>Email Verified</Text>
@@ -539,20 +595,37 @@ export default function BasicDetailsScreen() {
             <>
               <Text style={styles.helperText}>Connect your account to securely verify your email address. We'll only use it for important updates.</Text>
               <View style={styles.authButtonsContainer}>
-                <TouchableOpacity
-                  style={[styles.socialButton, styles.appleButton, isLinkingGoogle && styles.buttonDisabled]}
-                  onPress={() => handleSocialVerify('apple')}
-                  disabled={isLinkingGoogle}
-                >
-                  {isLinkingGoogle ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
-                      <Text style={styles.appleButtonText}>Verify with Apple</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                {Platform.OS === 'ios' ? (
+                  <View style={{ width: '100%', pointerEvents: isLinkingGoogle ? 'none' : 'auto', opacity: isLinkingGoogle ? 0.5 : 1 }}>
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                      cornerRadius={25}
+                      style={{ width: '100%', height: 50 }}
+                      onPress={() => handleSocialVerify('apple')}
+                    />
+                    {isLinkingGoogle && (
+                      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' }]}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.socialButton, styles.appleButton, isLinkingGoogle && styles.buttonDisabled]}
+                    onPress={() => handleSocialVerify('apple')}
+                    disabled={isLinkingGoogle}
+                  >
+                    {isLinkingGoogle ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
+                        <Text style={styles.appleButtonText}>Verify with Apple</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={[styles.socialButton, styles.googleButton, isLinkingGoogle && styles.buttonDisabled]}
@@ -569,6 +642,14 @@ export default function BasicDetailsScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                onPress={() => setShowManualEmail(true)}
+                style={{ marginTop: 16, alignItems: 'center' }}
+              >
+                <Text style={{ color: COLORS.accent, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' }}>
+                  Verify with email address instead
+                </Text>
+              </TouchableOpacity>
             </>
           )}
           {errors[currentStep.id] ? <Text style={[styles.errorText, { marginTop: 12, textAlign: 'center' }]}>{errors[currentStep.id]}</Text> : null}
