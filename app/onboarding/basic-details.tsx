@@ -344,23 +344,64 @@ export default function BasicDetailsScreen() {
     }
   };
 
-  /**
-   * Extracts the Google email from the current Supabase user object.
-   */
-  const extractGoogleEmailFromUser = async (): Promise<string | null> => {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user) return null;
-    if (userData.user.email) return userData.user.email;
-    const googleIdentity = userData.user.identities?.find((id: any) => id.provider === 'google');
-    return googleIdentity?.identity_data?.email ?? null;
-  };
 
   const handleSocialVerify = async (provider: 'google' | 'apple') => {
     try {
       setIsLinkingGoogle(true);
-      const redirectUrl = makeRedirectUri();
-      console.log('🔗 [auth] Starting Google link with redirect:', redirectUrl);
-      
+
+      // ── iOS Apple: use the native SDK (no web OAuth needed) ──────────────────
+      if (provider === 'apple' && Platform.OS === 'ios') {
+        const credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+
+        // Link this Apple identity to the current phone user so that
+        // "Continue with Apple" on the login screen works for returning users.
+        if (credential.identityToken) {
+          try {
+            const { data: { session: currentSession } } = await supabase.auth.getSession();
+            if (currentSession?.access_token) {
+              const res = await fetch(`${SUPABASE_URL}/functions/v1/link-apple-identity`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${currentSession.access_token}`,
+                },
+                body: JSON.stringify({ apple_identity_token: credential.identityToken }),
+              });
+              if (!res.ok) {
+                const json = await res.json().catch(() => ({}));
+                console.warn('Apple identity link failed (non-blocking):', json.error);
+              }
+            }
+          } catch (linkErr) {
+            console.warn('Apple identity linking error (non-blocking):', linkErr);
+          }
+        }
+
+        let foundEmail = credential.email;
+        if (!foundEmail) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          foundEmail = sessionData?.session?.user?.email;
+        }
+
+        if (foundEmail) {
+          setEmail(foundEmail);
+          setErrors((prev) => ({ ...prev, email: '' }));
+          setStepIndex((prev) => prev + 1);
+        } else {
+          setShowManualEmail(true);
+        }
+        return;
+      }
+
+      // ── Google OAuth (and Apple web OAuth if ever enabled for Android) ────────
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log(`🔗 [auth] Starting ${provider} link with redirect:`, redirectUrl);
+
       const { data, error } = await supabase.auth.linkIdentity({
         provider,
         options: {
@@ -372,49 +413,48 @@ export default function BasicDetailsScreen() {
       if (error) throw error;
       if (!data?.url) return;
 
-      // Extracts email from the OAuth callback URL (code or implicit token flow)
+      // Processes the OAuth callback URL and extracts the linked email
       const processAuthUrl = async (url: string) => {
-        console.log(`[auth] Processing auth URL for ${provider}:`, url);
+        console.log(`[auth] Processing auth URL for ${provider}`);
 
         if (url.includes('error=')) {
           let errorDesc: string | null = null;
-          const hashOrQuery = url.includes('#') ? url.split('#')[1] : url.split('?')[1] || '';
-          for (const pair of hashOrQuery.split('&')) {
+          const part = url.includes('#') ? url.split('#')[1] : url.split('?')[1] || '';
+          for (const pair of part.split('&')) {
             const [k, v] = pair.split('=');
             if ((k === 'error_description' || k === 'error') && v) { errorDesc = decodeURIComponent(v); break; }
           }
           if (errorDesc) throw new Error(errorDesc);
         }
 
-        // The linking was already handled on the Supabase server before redirecting back.
-        // We just fetch the updated user to get the linked identity/email.
-        console.log(`[auth] Fetching user to verify linked identity...`);
+        // Supabase already linked the identity server-side before redirecting back.
+        // Fetch the updated user to confirm and get the email.
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
 
         let linkedEmail = userData?.user?.email;
         if (userData?.user?.identities) {
-          const pi = userData.user.identities.find(id => id.provider === provider);
-          if (pi?.identity_data?.email) {
-            linkedEmail = pi.identity_data.email;
-          }
+          const pi = userData.user.identities.find((id: any) => id.provider === provider);
+          if (pi?.identity_data?.email) linkedEmail = pi.identity_data.email;
         }
 
         if (linkedEmail && isMountedRef.current) {
-          console.log(`[auth] Got email from linked identity:`, linkedEmail);
+          console.log(`[auth] Got email:`, linkedEmail);
           setEmail(linkedEmail);
           setErrors((prev) => ({ ...prev, email: '' }));
           setStepIndex((prev) => prev + 1);
         } else {
-          throw new Error(`Could not find email in your linked ${provider} account.`);
+          throw new Error(`Could not find email in your ${provider} account.`);
         }
       };
 
       if (Platform.OS === 'android') {
+        // On Android, open the full browser (not Custom Tab) so the OS can detect
+        // and route the astrodate://auth/callback deep link back to the app.
         const linkingPromise = new Promise<string>((resolve, reject) => {
           const timeout = setTimeout(() => {
             sub.remove();
-            reject(new Error('Google sign-in timed out. Please try again.'));
+            reject(new Error('Sign-in timed out. Please try again.'));
           }, 120_000);
 
           const sub = Linking.addEventListener('url', ({ url }) => {
@@ -427,7 +467,6 @@ export default function BasicDetailsScreen() {
           });
         });
 
-        console.log(`[auth] Opening Google auth in default browser...`);
         await Linking.openURL(data.url);
         const authUrl = await linkingPromise;
         await processAuthUrl(authUrl);
@@ -439,8 +478,9 @@ export default function BasicDetailsScreen() {
         }
       }
     } catch (err: any) {
-      console.error('Google link error:', err);
-      showAlert('Verification Failed', err.message || 'Could not connect Google. Please try again.');
+      if (err?.code === 'ERR_REQUEST_CANCELED') return;
+      console.warn(`⚠️ ${provider} verify error:`, err);
+      showAlert('Verification Failed', err.message || `Could not connect ${provider}. Please try again.`);
     } finally {
       if (isMountedRef.current) setIsLinkingGoogle(false);
     }
@@ -552,7 +592,9 @@ export default function BasicDetailsScreen() {
             <>
               <Text style={styles.helperText}>Connect your account to securely verify your email address. We'll only use it for important updates.</Text>
               <View style={styles.authButtonsContainer}>
-                {Platform.OS === 'ios' ? (
+                {/* Apple Sign In — iOS only (web OAuth for Android requires a separate
+                    Apple Service ID and is not supported in this build) */}
+                {Platform.OS === 'ios' && (
                   <View style={{ width: '100%', pointerEvents: isLinkingGoogle ? 'none' : 'auto', opacity: isLinkingGoogle ? 0.5 : 1 }}>
                     <AppleAuthentication.AppleAuthenticationButton
                       buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
@@ -567,21 +609,6 @@ export default function BasicDetailsScreen() {
                       </View>
                     )}
                   </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.socialButton, styles.appleButton, isLinkingGoogle && styles.buttonDisabled]}
-                    onPress={() => handleSocialVerify('apple')}
-                    disabled={isLinkingGoogle}
-                  >
-                    {isLinkingGoogle ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <>
-                        <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
-                        <Text style={styles.appleButtonText}>Verify with Apple</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
                 )}
 
                 <TouchableOpacity

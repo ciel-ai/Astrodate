@@ -1,4 +1,4 @@
--- Migration 080: Remove old plan tiers and fix plan_type stamping in webhook fn.
+-- Migration 081: Remove old plan tiers and fix plan_type stamping in webhook fn.
 --
 -- Context:
 --   Migration 039 seeded stellar-monthly, cosmic-annual, galaxy-lifetime.

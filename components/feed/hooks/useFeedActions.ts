@@ -126,34 +126,47 @@ export function useFeedActions({
   const handleLike = useCallback(async (promptId?: string, comment?: string) => {
     if (isFlipped || isTransitioning || profiles.length === 0 || currentProfileIndex >= profiles.length) return;
 
+    const currentProfile = profiles[currentProfileIndex];
+    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
+    if (!likedUserId) return;
+
     setIsTransitioning(true);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setNextCardBlurActive();
 
-    const toX = SCREEN_WIDTH + 120;
-    translateX.value = withTiming(toX, { duration: 220 }, (finished) => {
-      if (finished) {
-        runOnJS(updateProfileIndex)();
-      }
-    });
-    translateY.value = withTiming(translateY.value + 20, { duration: 220 });
-    opacity.value = withTiming(0, { duration: 200 });
+    try {
+      const result = await saveUserLike(likedUserId, 'like', promptId, comment);
 
-    const currentProfile = profiles[currentProfileIndex];
-    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
-
-    if (likedUserId) {
-      try {
-        const result = await saveUserLike(likedUserId, 'like', promptId, comment);
-        if (result.success) {
-          signalLike(likedUserId);
-          await checkAndShowMatch(likedUserId, currentProfile);
-        } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
-          console.warn(`⚠️ User ${likedUserId} no longer exists.`);
-        }
-      } catch (error) {
-        console.error('Error in handleLike backend:', error);
+      if (result.success) {
+        signalLike(likedUserId);
+        const toX = SCREEN_WIDTH + 120;
+        translateX.value = withTiming(toX, { duration: 220 }, (finished) => {
+          if (finished) runOnJS(updateProfileIndex)();
+        });
+        translateY.value = withTiming(translateY.value + 20, { duration: 220 });
+        opacity.value = withTiming(0, { duration: 200 });
+        await checkAndShowMatch(likedUserId, currentProfile);
+      } else if (result.error === 'LIKE_QUOTA_EXCEEDED') {
+        resetCardPosition();
+        setIsTransitioning(false);
+        setShowUpgradeSheet(true);
+      } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
+        console.warn(`⚠️ User ${likedUserId} no longer exists.`);
+        const toX = SCREEN_WIDTH + 120;
+        translateX.value = withTiming(toX, { duration: 220 }, (finished) => {
+          if (finished) runOnJS(updateProfileIndex)();
+        });
+        translateY.value = withTiming(translateY.value + 20, { duration: 220 });
+        opacity.value = withTiming(0, { duration: 200 });
+      } else {
+        console.error('Error in handleLike:', result.error);
+        resetCardPosition();
+        setIsTransitioning(false);
       }
+    } catch (error) {
+      console.error('Error in handleLike backend:', error);
+      resetCardPosition();
+      setIsTransitioning(false);
     }
   }, [
     isFlipped,
@@ -167,7 +180,9 @@ export function useFeedActions({
     translateX,
     translateY,
     opacity,
+    resetCardPosition,
     setIsTransitioning,
+    setShowUpgradeSheet,
   ]);
 
   const handleDislike = useCallback(async () => {
@@ -219,40 +234,46 @@ export function useFeedActions({
   const handleSuperLike = useCallback(async () => {
     if (isFlipped || isTransitioning || profiles.length === 0 || currentProfileIndex >= profiles.length) return;
 
+    const currentProfile = profiles[currentProfileIndex];
+    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
+    if (!likedUserId) return;
+
     setIsTransitioning(true);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setNextCardBlurActive();
 
-    const toY = -SCREEN_WIDTH;
-    translateY.value = withTiming(toY, { duration: 260 }, (finished) => {
-      if (finished) {
-        runOnJS(updateProfileIndex)();
-      }
-    });
-    opacity.value = withTiming(0, { duration: 200 });
+    try {
+      const result = await saveUserLike(likedUserId, 'super_like');
 
-    const currentProfile = profiles[currentProfileIndex];
-    const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
-
-    if (likedUserId) {
-      try {
-        const result = await saveUserLike(likedUserId, 'super_like');
-        if (result.success) {
-          signalSuperLike(likedUserId);
-          await checkAndShowMatch(likedUserId, currentProfile);
-          void fetchSuperLikesRemaining();
-        } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
-          console.warn(`⚠️ User ${likedUserId} no longer exists, skipping...`);
-        } else if (result.error === 'QUOTA_EXCEEDED' || result.error === 'SUPER_LIKE_QUOTA_EXCEEDED') {
-          resetCardPosition();
-          setShowUpgradeSheet(true);
-          return;
-        } else {
-          console.error('Error saving super like:', result.error);
-        }
-      } catch (error) {
-        console.error('Error in handleSuperLike backend:', error);
+      if (result.success) {
+        signalSuperLike(likedUserId);
+        const toY = -SCREEN_WIDTH;
+        translateY.value = withTiming(toY, { duration: 260 }, (finished) => {
+          if (finished) runOnJS(updateProfileIndex)();
+        });
+        opacity.value = withTiming(0, { duration: 200 });
+        await checkAndShowMatch(likedUserId, currentProfile);
+        void fetchSuperLikesRemaining();
+      } else if (result.error === 'SUPER_LIKE_QUOTA_EXCEEDED') {
+        resetCardPosition();
+        setIsTransitioning(false);
+        setShowUpgradeSheet(true);
+      } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
+        console.warn(`⚠️ User ${likedUserId} no longer exists, skipping...`);
+        const toY = -SCREEN_WIDTH;
+        translateY.value = withTiming(toY, { duration: 260 }, (finished) => {
+          if (finished) runOnJS(updateProfileIndex)();
+        });
+        opacity.value = withTiming(0, { duration: 200 });
+      } else {
+        console.error('Error saving super like:', result.error);
+        resetCardPosition();
+        setIsTransitioning(false);
       }
+    } catch (error) {
+      console.error('Error in handleSuperLike backend:', error);
+      resetCardPosition();
+      setIsTransitioning(false);
     }
   }, [
     isFlipped,
@@ -291,28 +312,50 @@ export function useFeedActions({
     });
   }, [matchedProfile, matchedUserId, router, setShowMatchModal, setMatchedProfile, setMatchedUserId, setMatchIcebreaker, setMatchAstroScore, setMatchId]);
 
-  const saveSwipeAction = useCallback(async (direction: 'left' | 'right') => {
+  const saveSwipeAction = useCallback(async (direction: 'left' | 'right' | 'up') => {
     if (profiles.length === 0 || currentProfileIndex >= profiles.length) return;
 
     const currentProfile = profiles[currentProfileIndex];
     const likedUserId = currentProfile?.id ? String(currentProfile.id) : undefined;
+    if (!likedUserId) return;
 
-    if (likedUserId) {
-      const actionType = direction === 'right' ? 'like' : 'dislike';
+    if (direction === 'up') {
       try {
-        const result = await saveUserLike(likedUserId, actionType);
+        const result = await saveUserLike(likedUserId, 'super_like');
         if (result.success) {
-          if (actionType === 'like') signalLike(likedUserId);
-          else if (actionType === 'dislike') signalDislike(likedUserId);
-        }
-        if (result.success && actionType === 'like') {
+          signalSuperLike(likedUserId);
           await checkAndShowMatch(likedUserId, currentProfile);
+          void fetchSuperLikesRemaining();
+        } else if (result.error === 'SUPER_LIKE_QUOTA_EXCEEDED') {
+          setShowUpgradeSheet(true);
+        } else if (result.error !== 'THE_USER_NO_LONGER_EXISTS') {
+          console.error('Error saving super_like from swipe-up:', result.error);
         }
       } catch (error) {
-        console.error(`Error saving ${actionType} from swipe:`, error);
+        console.error('Error in swipe-up super_like:', error);
       }
+      return;
     }
-  }, [profiles, currentProfileIndex, checkAndShowMatch]);
+
+    const actionType = direction === 'right' ? 'like' : 'dislike';
+    try {
+      const result = await saveUserLike(likedUserId, actionType);
+      if (result.success) {
+        if (actionType === 'like') {
+          signalLike(likedUserId);
+          await checkAndShowMatch(likedUserId, currentProfile);
+        } else {
+          signalDislike(likedUserId);
+        }
+      } else if (result.error === 'LIKE_QUOTA_EXCEEDED') {
+        setShowUpgradeSheet(true);
+      } else if (result.error !== 'THE_USER_NO_LONGER_EXISTS') {
+        console.error(`Error saving ${actionType} from swipe:`, result.error);
+      }
+    } catch (error) {
+      console.error(`Error saving ${actionType} from swipe:`, error);
+    }
+  }, [profiles, currentProfileIndex, checkAndShowMatch, fetchSuperLikesRemaining, setShowUpgradeSheet]);
 
   const submitReport = useCallback(
     async (reason: string) => {
