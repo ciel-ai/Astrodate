@@ -8,6 +8,7 @@
     "scheme": "astrodate",
     "userInterfaceStyle": "dark",
     "ios": {
+      "buildNumber": "1",
       "supportsTablet": true,
       "bundleIdentifier": "com.cielinfitech.astrodate",
       "infoPlist": {
@@ -40,6 +41,7 @@
       }
     },
     "android": {
+      "versionCode": 1,
       "package": "com.astrodate.app",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {

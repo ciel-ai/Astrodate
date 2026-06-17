@@ -40,7 +40,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const navigation: any = useNavigation();
   const { showAlert } = useAuthAlert();
-    const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -187,7 +187,7 @@ export default function LoginScreen() {
     if (isLoggingIn) return;
     try {
       setIsLoggingIn(true);
-      
+
       if (provider === 'apple' && Platform.OS === 'ios') {
         // Generate nonce — Apple receives the SHA-256 hash, Supabase receives the raw value
         const rawNonce = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
@@ -280,6 +280,8 @@ export default function LoginScreen() {
       };
 
       if (Platform.OS === 'android') {
+        // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
+        // and shows a permanent white screen. Use the default browser instead.
         const linkingPromise = new Promise<string>((resolve, reject) => {
           const timeout = setTimeout(() => {
             sub.remove();
@@ -301,6 +303,7 @@ export default function LoginScreen() {
         const authUrl = await linkingPromise;
         await processLoginUrl(authUrl);
       } else {
+        // iOS: openAuthSessionAsync works correctly with SFSafariViewController
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         console.log(`[auth] Browser result: ${result.type}`);
         if (result.type === 'success' && result.url) {
@@ -434,20 +437,40 @@ export default function LoginScreen() {
 
               {/* Social Login Buttons */}
               <View style={styles.authButtonsContainer}>
-                <TouchableOpacity 
-                  style={[styles.socialButton, styles.appleButton, isLoggingIn && styles.buttonDisabled]} 
-                  onPress={() => handleSocialLogin('apple')}
-                  disabled={isLoggingIn}
-                >
-                  {isLoggingIn ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="logo-apple" size={18} color="#FFFFFF" style={styles.socialIcon} />
-                      <Text style={styles.appleButtonText}>Continue with Apple</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                {Platform.OS === 'ios' ? (
+                  <View style={{ width: '100%', pointerEvents: isLoggingIn ? 'none' : 'auto', opacity: isLoggingIn ? 0.5 : 1 }}>
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                      cornerRadius={25}
+                      style={{ width: '100%', height: 50 }}
+                      onPress={() => handleSocialLogin('apple')}
+                    />
+                    {isLoggingIn && (
+                      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' }]}>
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.socialButton, styles.appleButton, isLoggingIn && styles.buttonDisabled]}
+                    onPress={() => handleSocialLogin('apple')}
+                    disabled={isLoggingIn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Continue with Apple"
+                    accessibilityState={{ disabled: isLoggingIn }}
+                  >
+                    {isLoggingIn ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-apple" size={18} color="#FFFFFF" style={styles.socialIcon} />
+                        <Text style={styles.appleButtonText}>Continue with Apple</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={[styles.socialButton, styles.googleButton, isLoggingIn && styles.buttonDisabled]}
@@ -471,7 +494,7 @@ export default function LoginScreen() {
               {/* Sign up link */}
               <View style={styles.signupRow}>
                 <Text style={styles.signupText}>Don't have an account? </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => router.push('/onboarding/signup')}
                   accessibilityRole="button"
                   accessibilityLabel="Sign up"
