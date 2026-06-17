@@ -28,6 +28,7 @@ export function useFeedSharedValues(initialTabBarHidden: boolean = false) {
     translateX.value = withSpring(0, { damping: 12, stiffness: 120 });
     translateY.value = withSpring(0, { damping: 12, stiffness: 120 });
     rotate.value = withSpring(0, { damping: 12, stiffness: 120 });
+    opacity.value = withSpring(1, { damping: 12, stiffness: 120 });
   };
 
   return {
