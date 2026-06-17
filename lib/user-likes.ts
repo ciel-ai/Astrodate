@@ -44,7 +44,7 @@ export async function saveUserLike(
 
     if (actionType === 'like') {
       const { data: allowed, error: rpcError } = await supabase
-        .rpc('consume_like' as any, { p_user_id: userId } as any);
+        .rpc('consume_like', { p_user_id: userId });
 
       if (rpcError) {
         throw new Error(rpcError.message || 'RPC consume_like failed');
@@ -57,7 +57,7 @@ export async function saveUserLike(
 
     if (actionType === 'super_like') {
       const { data: allowed, error: rpcError } = await supabase
-        .rpc('consume_super_like' as any, { p_user_id: userId } as any);
+        .rpc('consume_super_like', { p_user_id: userId });
 
       if (rpcError) {
         throw new Error(rpcError.message || 'RPC consume_super_like failed');

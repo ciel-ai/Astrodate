@@ -1,6 +1,7 @@
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSubscriptionStatus } from '@/hooks/useSubscriptionStatus';
 import { Image } from 'expo-image';
 import { getMyDailyPick, type DailyPick } from '@/lib/daily-picks';
 import { fetchFinalMatches, getDiscoveryPreferences, hasCompletedOnboarding, type DiscoveryPreferences, type FinalMatchResult } from '@/lib/matching';
@@ -125,6 +126,7 @@ export function useFeedData() {
   const [profilePhotoIndex, setProfilePhotoIndex] = useState<Record<string, number>>({});
   const [currentUserInterest, setCurrentUserInterest] = useState<string[] | undefined>(undefined);
   const [superLikesRemaining, setSuperLikesRemaining] = useState<number | null>(null);
+  const [likesRemaining, setLikesRemaining] = useState<number | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [reportedUserIds, setReportedUserIds] = useState<Set<string>>(new Set());
   const [isFallbackFeed, setIsFallbackFeed] = useState(false);
@@ -133,21 +135,42 @@ export function useFeedData() {
   const [showTutorial, setShowTutorial] = useState(false);
   const tutorialCheckedRef = useRef(false);
 
-  // Fetch remaining super-likes for the badge
+  const { membership } = useSubscriptionStatus();
+
   const fetchSuperLikesRemaining = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data, error } = await (supabase.rpc as any)('get_super_likes_remaining', { p_user_id: user.id });
+      const { data, error } = await supabase.rpc('get_super_likes_remaining', { p_user_id: user.id });
       if (!error && data !== null) setSuperLikesRemaining(data as number);
     } catch (err) {
       console.error('Error fetching super likes remaining:', err);
     }
   }, []);
 
+  const fetchLikesRemaining = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase.rpc('get_likes_remaining', { p_user_id: user.id });
+      if (!error && data !== null) setLikesRemaining(data as number);
+    } catch (err) {
+      console.error('Error fetching likes remaining:', err);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchSuperLikesRemaining();
-  }, [fetchSuperLikesRemaining]);
+    void fetchLikesRemaining();
+  }, [fetchSuperLikesRemaining, fetchLikesRemaining]);
+
+  // When the subscription plan changes (e.g. after purchase), refresh quota counters
+  // so the badge and upgrade modal reflect the new plan limits immediately.
+  useEffect(() => {
+    if (!membership) return;
+    void fetchSuperLikesRemaining();
+    void fetchLikesRemaining();
+  }, [membership, fetchSuperLikesRemaining, fetchLikesRemaining]);
 
   useEffect(() => {
     let mounted = true;
@@ -572,6 +595,7 @@ export function useFeedData() {
     setReportedUserIds,
     superlikedProfiles,
     superLikesRemaining,
+    likesRemaining,
     unreadCount,
     currentUserPhoto,
     currentUserAstro,
@@ -580,6 +604,7 @@ export function useFeedData() {
     activeAstroEvent,
     setActiveAstroEvent,
     fetchSuperLikesRemaining,
+    fetchLikesRemaining,
     mapMatchesToProfiles,
     loadDiscoverProfiles,
     selectedInsightTab,

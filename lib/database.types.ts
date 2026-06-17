@@ -518,13 +518,21 @@ export type Database = {
         Args: Record<string, never>;
         Returns: Json;
       };
-      check_super_like_quota: {
-        Args: Record<string, never>;
-        Returns: Json;
+      consume_super_like: {
+        Args: { p_user_id: string };
+        Returns: boolean;
       };
-      get_super_like_quota_status: {
-        Args: Record<string, never>;
-        Returns: Json;
+      consume_like: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
+      get_super_likes_remaining: {
+        Args: { p_user_id: string };
+        Returns: number;
+      };
+      get_likes_remaining: {
+        Args: { p_user_id: string };
+        Returns: number;
       };
       get_my_daily_pick: {
         Args: Record<string, never>;

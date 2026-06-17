@@ -18,6 +18,7 @@ interface CardActionBarProps {
   onSuperLike: () => void;
   isTransitioning: boolean;
   superLikesRemaining: number | null;
+  likesRemaining: number | null;
   bottom: number;
   // Animated styles passed from main screen/gestures
   dislikeButtonScale: any;
@@ -37,6 +38,7 @@ export function CardActionBar({
   onSuperLike,
   isTransitioning,
   superLikesRemaining,
+  likesRemaining,
   bottom,
   dislikeButtonScale,
   dislikeButtonColorStyle,
@@ -102,6 +104,11 @@ export function CardActionBar({
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
             <AnimatedMaterialIcons name="favorite" size={28} style={likeIconStyle} />
           </Animated.View>
+          {likesRemaining !== null && likesRemaining >= 0 && likesRemaining <= 2 && likesRemaining < 999 && (
+            <View style={styles.superLikeCountBadge}>
+              <Text style={styles.superLikeCountBadgeText}>{likesRemaining}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </Animated.View>
