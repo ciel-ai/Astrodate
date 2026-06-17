@@ -707,7 +707,7 @@ const styles = StyleSheet.create({
   },
   contentWrapper: { flex: 1, position: 'relative' },
   scrollView: { flex: 1, backgroundColor: 'transparent' },
-  scrollContent: { flexGrow: 1, paddingBottom: 100 },
+  scrollContent: { flexGrow: 1, paddingBottom: 200 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   starryBackground: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
   errorText: {
