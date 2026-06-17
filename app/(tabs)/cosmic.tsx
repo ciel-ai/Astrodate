@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -36,6 +37,13 @@ type ElementFilter = 'All' | 'Fire' | 'Earth' | 'Air' | 'Water';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const { width: SCREEN_W } = Dimensions.get('window');
+const CARD_GAP = 10;
+const CARD_H_PAD = 18;
+// Each card = half screen minus padding and gap
+const CARD_W = (SCREEN_W - CARD_H_PAD * 2 - CARD_GAP) / 2;
+const CARD_IMG_H = CARD_W * 1.35; // ~4:3 portrait ratio
+
 const ELEMENT_COLORS: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   Fire:  { bg: 'rgba(249,115,22,0.15)',  border: 'rgba(249,115,22,0.4)',  text: '#fb923c', dot: '#f97316' },
   Earth: { bg: 'rgba(34,197,94,0.12)',   border: 'rgba(34,197,94,0.35)',  text: '#4ade80', dot: '#22c55e' },
@@ -59,10 +67,9 @@ const STAR_DATA = Array.from({ length: 80 }).map((_, i) => ({
 }));
 
 const FILTERS: ElementFilter[] = ['All', 'Fire', 'Earth', 'Air', 'Water'];
-
 const PLACEHOLDER = require('@/assets/images/avatar-placeholder.png');
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function calcAge(birthDate: string): number | undefined {
   const bd = new Date(birthDate);
@@ -76,10 +83,9 @@ function calcAge(birthDate: string): number | undefined {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function ScoreBadge({ score }: { score: number }) {
-  const colors = SCORE_GRADIENT(score);
   return (
     <LinearGradient
-      colors={colors}
+      colors={SCORE_GRADIENT(score)}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.scoreBadge}
@@ -122,7 +128,7 @@ function EmptyState({ filter, onReset }: { filter: ElementFilter; onReset: () =>
   );
 }
 
-// ─── Profile Card (2-col grid) ────────────────────────────────────────────────
+// ─── Profile Card ─────────────────────────────────────────────────────────────
 
 function CosmicCard({
   profile,
@@ -133,58 +139,52 @@ function CosmicCard({
   onPress: () => void;
   index: number;
 }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 350,
-        delay: index * 60,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 350,
-        delay: index * 60,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 320,
+      delay: index * 70,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <TouchableOpacity
-        style={styles.card}
-        onPress={onPress}
-        activeOpacity={0.88}
-      >
+    // flex: 1 is required so the card fills its FlatList column cell
+    <Animated.View style={[styles.cardWrapper, { transform: [{ translateY: slideAnim }] }]}>
+      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
+        {/* Photo */}
         <View style={styles.cardImageContainer}>
           <Image
             source={profile.image}
-            placeholder={profile.image?.thumbnail ? { uri: profile.image.thumbnail } : undefined}
             style={styles.cardImage}
             contentFit="cover"
-            transition={400}
+            transition={300}
+            placeholder={PLACEHOLDER}
           />
-          {/* Score badge top-right */}
+          {/* Score badge */}
           <View style={styles.scoreBadgeWrapper}>
             <ScoreBadge score={profile.astroScore} />
           </View>
-          {/* Gradient overlay bottom */}
+          {/* Gradient overlay */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.75)']}
+            colors={['transparent', 'rgba(0,0,0,0.82)']}
             style={styles.cardOverlay}
           >
             <Text style={styles.cardName} numberOfLines={1}>
               {profile.name}{profile.age ? `, ${profile.age}` : ''}
             </Text>
+            {profile.location ? (
+              <Text style={styles.cardLocation} numberOfLines={1}>
+                📍 {profile.location}
+              </Text>
+            ) : null}
             <View style={styles.cardBottom}>
               <ElementPill element={profile.dominantElement} />
-              {profile.westernSign && (
+              {profile.westernSign ? (
                 <Text style={styles.cardSign}>{profile.westernSign}</Text>
-              )}
+              ) : null}
             </View>
           </LinearGradient>
         </View>
@@ -193,136 +193,21 @@ function CosmicCard({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── Header ───────────────────────────────────────────────────────────────────
 
-export default function CosmicScreen() {
-  const router = useRouter();
-  const [profiles, setProfiles] = useState<CosmicProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<ElementFilter>('All');
-  const [isSubscribed, setIsSubscribed] = useState(false);
-
-  const headerFade = useRef(new Animated.Value(0)).current;
-
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-
-  const fetchProfiles = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) return;
-
-      // Membership check
-      const membership = await getMembershipOrFree();
-      setIsSubscribed(membership.is_active);
-
-      // Fetch standouts
-      const standouts: Standout[] = await getStandouts(userId);
-      if (!standouts.length) {
-        setProfiles([]);
-        return;
-      }
-
-      const userIds = standouts.map((s) => s.match_user_id);
-
-      // Batch fetch astro + photos
-      const [astroRes, photosRes] = await Promise.all([
-        supabase
-          .from('astro_details')
-          .select('user_id, birth_date')
-          .in('user_id', userIds),
-        supabase
-          .from('user_photos')
-          .select('user_id, photo_url, thumbnail_url, is_primary')
-          .in('user_id', userIds),
-      ]);
-
-      const astroMap: Record<string, any> = {};
-      for (const a of astroRes.data ?? []) astroMap[a.user_id] = a;
-
-      const photosMap: Record<string, any[]> = {};
-      for (const ph of photosRes.data ?? []) {
-        if (!ph.user_id) continue;
-        if (!photosMap[ph.user_id]) photosMap[ph.user_id] = [];
-        photosMap[ph.user_id].push(ph);
-      }
-
-      const mapped: CosmicProfile[] = standouts.map((s) => {
-        const astro = astroMap[s.match_user_id];
-        const photos = photosMap[s.match_user_id] ?? [];
-        const primary = photos.find((p) => p.is_primary) || photos[0] || null;
-        return {
-          id: s.match_user_id,
-          name: s.full_name || 'Unknown',
-          age: astro?.birth_date ? calcAge(astro.birth_date) : undefined,
-          location: s.location || '',
-          astroScore: Math.round(s.astro_score * 100),
-          westernSign: s.western_sign,
-          dominantElement: s.dominant_element,
-          image: primary?.photo_url ? { uri: primary.photo_url, thumbnail: primary.thumbnail_url ?? undefined } : PLACEHOLDER,
-        };
-      });
-
-      // Sort by score descending
-      mapped.sort((a, b) => b.astroScore - a.astroScore);
-      setProfiles(mapped);
-
-      // Animate header in
-      Animated.timing(headerFade, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-
-    } catch (err) {
-      console.error('CosmicScreen fetch error:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchProfiles(); }, []);
-
-  // ── Analytics / Tracking Prompt ─────────────────────────────────────────────
-  useEffect(() => {
-    import('react-native').then(({ Platform }) => {
-      if (Platform.OS === 'ios') {
-        import('expo-tracking-transparency').then(({ requestTrackingPermissionsAsync }) => {
-          // Fire ATT contextually here after user has engaged with the app
-          requestTrackingPermissionsAsync().catch(console.warn);
-        });
-      }
-    });
-  }, []);
-
-  // ── Filtered list ──────────────────────────────────────────────────────────
-
-  const filtered = activeFilter === 'All'
-    ? profiles
-    : profiles.filter((p) => p.dominantElement === activeFilter);
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  const renderCard = ({ item, index }: { item: CosmicProfile; index: number }) => (
-    <CosmicCard
-      profile={item}
-      index={index}
-      onPress={() =>
-        router.push({
-          pathname: '/profile-details',
-          params: { userId: item.id },
-        })
-      }
-    />
-  );
-
-  const ListHeader = (
-    <Animated.View style={{ opacity: headerFade }}>
+function ListHeader({
+  profiles,
+  filtered,
+  activeFilter,
+  setActiveFilter,
+}: {
+  profiles: CosmicProfile[];
+  filtered: CosmicProfile[];
+  activeFilter: ElementFilter;
+  setActiveFilter: (f: ElementFilter) => void;
+}) {
+  return (
+    <View>
       {/* Hero stat row */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -332,8 +217,7 @@ export default function CosmicScreen() {
         <View style={styles.statDivider} />
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>
-            {profiles.length ? Math.max(...profiles.map((p) => p.astroScore)) : '—'}
-            {profiles.length ? '%' : ''}
+            {profiles.length ? `${Math.max(...profiles.map((p) => p.astroScore))}%` : '—'}
           </Text>
           <Text style={styles.statLabel}>Top match</Text>
         </View>
@@ -341,9 +225,8 @@ export default function CosmicScreen() {
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>
             {profiles.length
-              ? Math.round(profiles.reduce((acc, p) => acc + p.astroScore, 0) / profiles.length)
+              ? `${Math.round(profiles.reduce((a, p) => a + p.astroScore, 0) / profiles.length)}%`
               : '—'}
-            {profiles.length ? '%' : ''}
           </Text>
           <Text style={styles.statLabel}>Avg score</Text>
         </View>
@@ -377,9 +260,7 @@ export default function CosmicScreen() {
               <Text
                 style={[
                   styles.filterPillText,
-                  isActive && (elColors
-                    ? { color: elColors.text }
-                    : styles.filterPillTextActiveAll),
+                  isActive && (elColors ? { color: elColors.text } : styles.filterPillTextActiveAll),
                 ]}
               >
                 {f}
@@ -398,7 +279,115 @@ export default function CosmicScreen() {
         </Text>
         <Text style={styles.sectionSub}>sorted by AstroScore</Text>
       </View>
-    </Animated.View>
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
+export default function CosmicScreen() {
+  const router = useRouter();
+  const [profiles, setProfiles] = useState<CosmicProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<ElementFilter>('All');
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+
+  const fetchProfiles = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) return;
+
+      const membership = await getMembershipOrFree();
+      setIsSubscribed(membership.is_active);
+
+      const standouts: Standout[] = await getStandouts(userId);
+
+      if (!standouts.length) {
+        setProfiles([]);
+        // Fire-and-forget prewarm so cache builds for next visit
+        void supabase.rpc('enqueue_synastry_prewarm', { p_user_id: userId }).then(({ error }) => {
+          if (!error) {
+            void supabase.functions.invoke('process-synastry-prewarm', { body: { batch_size: 10 } });
+          }
+        });
+        return;
+      }
+
+      const userIds = standouts.map((s) => s.match_user_id);
+
+      const [astroRes, photosRes] = await Promise.all([
+        supabase.from('astro_details').select('user_id, birth_date').in('user_id', userIds),
+        supabase
+          .from('user_photos')
+          .select('user_id, photo_url, thumbnail_url, is_primary')
+          .in('user_id', userIds),
+      ]);
+
+      const astroMap: Record<string, { birth_date: string }> = {};
+      for (const a of astroRes.data ?? []) astroMap[a.user_id] = a;
+
+      const photosMap: Record<string, { photo_url: string; thumbnail_url: string | null; is_primary: boolean }[]> = {};
+      for (const ph of photosRes.data ?? []) {
+        if (!ph.user_id) continue;
+        if (!photosMap[ph.user_id]) photosMap[ph.user_id] = [];
+        photosMap[ph.user_id].push({
+          photo_url: ph.photo_url,
+          thumbnail_url: ph.thumbnail_url,
+          is_primary: ph.is_primary ?? false,
+        });
+      }
+
+      const mapped: CosmicProfile[] = standouts.map((s) => {
+        const astro = astroMap[s.match_user_id];
+        const photos = photosMap[s.match_user_id] ?? [];
+        const primary = photos.find((p) => p.is_primary) ?? photos[0] ?? null;
+        return {
+          id: s.match_user_id,
+          name: s.full_name || 'Unknown',
+          age: astro?.birth_date ? calcAge(astro.birth_date) : undefined,
+          location: s.location || '',
+          astroScore: Math.round(s.astro_score * 100),
+          westernSign: s.western_sign,
+          dominantElement: s.dominant_element,
+          image: primary?.photo_url
+            ? { uri: primary.photo_url }
+            : PLACEHOLDER,
+        };
+      });
+
+      mapped.sort((a, b) => b.astroScore - a.astroScore);
+      setProfiles(mapped);
+    } catch (err) {
+      console.error('CosmicScreen fetch error:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchProfiles(); }, []);
+
+  // ── Filtered list ──────────────────────────────────────────────────────────
+
+  const filtered = activeFilter === 'All'
+    ? profiles
+    : profiles.filter((p) => p.dominantElement === activeFilter);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  const renderCard = ({ item, index }: { item: CosmicProfile; index: number }) => (
+    <CosmicCard
+      profile={item}
+      index={index}
+      onPress={() => router.push({ pathname: '/profile-details', params: { userId: item.id } })}
+    />
   );
 
   return (
@@ -460,12 +449,16 @@ export default function CosmicScreen() {
             numColumns={2}
             columnWrapperStyle={styles.columnWrapper}
             contentContainerStyle={styles.listContent}
-            ListHeaderComponent={ListHeader}
-            ListEmptyComponent={
-              <EmptyState
-                filter={activeFilter}
-                onReset={() => setActiveFilter('All')}
+            ListHeaderComponent={
+              <ListHeader
+                profiles={profiles}
+                filtered={filtered}
+                activeFilter={activeFilter}
+                setActiveFilter={setActiveFilter}
               />
+            }
+            ListEmptyComponent={
+              <EmptyState filter={activeFilter} onReset={() => setActiveFilter('All')} />
             }
             refreshControl={
               <RefreshControl
@@ -485,9 +478,7 @@ export default function CosmicScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   starsContainer: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -498,9 +489,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 50,
   },
-  safeArea: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
 
   // Header
   header: {
@@ -552,10 +541,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
     paddingVertical: 14,
   },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-  },
+  statCard: { flex: 1, alignItems: 'center' },
   statNumber: {
     fontSize: 22,
     fontWeight: '700',
@@ -574,9 +560,7 @@ const styles = StyleSheet.create({
   },
 
   // Filters
-  filtersScroll: {
-    flexGrow: 0,
-  },
+  filtersScroll: { flexGrow: 0 },
   filtersScrollContent: {
     paddingHorizontal: 18,
     gap: 8,
@@ -597,19 +581,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(168,85,247,0.2)',
     borderColor: 'rgba(168,85,247,0.5)',
   },
-  filterDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
+  filterDot: { width: 6, height: 6, borderRadius: 3 },
   filterPillText: {
     fontSize: 12,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.5)',
   },
-  filterPillTextActiveAll: {
-    color: '#c084fc',
-  },
+  filterPillTextActiveAll: { color: '#c084fc' },
 
   // Section label
   sectionLabelRow: {
@@ -618,16 +596,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 18,
     marginTop: 16,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
     color: 'rgba(255,255,255,0.85)',
   },
-  sectionCount: {
-    color: '#a855f7',
-  },
+  sectionCount: { color: '#a855f7' },
   sectionSub: {
     fontSize: 10,
     color: 'rgba(255,255,255,0.3)',
@@ -635,22 +611,26 @@ const styles = StyleSheet.create({
 
   // Grid
   listContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: CARD_H_PAD,
     paddingBottom: 100,
   },
   columnWrapper: {
-    gap: 10,
-    marginBottom: 10,
+    gap: CARD_GAP,
+    marginBottom: CARD_GAP,
   },
 
-  // Card
+  // Card — explicit width so it never collapses in 2-col FlatList
+  cardWrapper: {
+    width: CARD_W,
+  },
   card: {
-    flex: 1,
     borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   cardImageContainer: {
-    height: 220,
+    width: CARD_W,
+    height: CARD_IMG_H,
     position: 'relative',
   },
   cardImage: {
@@ -681,14 +661,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingTop: 24,
+    paddingTop: 32,
     paddingBottom: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
   },
   cardName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  cardLocation: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.65)',
     marginBottom: 4,
   },
   cardBottom: {
@@ -706,19 +691,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
   },
-  elementDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-  },
-  elementPillText: {
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  cardSign: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.55)',
-  },
+  elementDot: { width: 5, height: 5, borderRadius: 3 },
+  elementPillText: { fontSize: 9, fontWeight: '700' },
+  cardSign: { fontSize: 10, color: 'rgba(255,255,255,0.55)' },
 
   // Loading
   loadingContainer: {
@@ -739,10 +714,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 10,
   },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 4,
-  },
+  emptyIcon: { fontSize: 40, marginBottom: 4 },
   emptyTitle: {
     fontSize: 17,
     fontWeight: '700',

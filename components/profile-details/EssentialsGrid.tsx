@@ -23,7 +23,7 @@ export default function EssentialsGrid({ profile }: EssentialsGridProps) {
             </View>
             <View>
               <Text style={styles.cardLabel}>Nearby</Text>
-              <Text style={styles.cardValue}>5 km away</Text> {/* TODO: Make dynamic based on actual distance if available */}
+              <Text style={styles.cardValue}>5 km away</Text>
             </View>
           </View>
         )}

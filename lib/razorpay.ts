@@ -64,7 +64,13 @@ export async function createRazorpayPaymentLink(payload: PlanCheckoutPayload) {
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Failed to create Razorpay payment link: ${resp.status} ${text}`);
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      // Surface the nested Razorpay error description if present
+      detail = parsed?.detail?.error?.description ?? parsed?.detail ?? text;
+    } catch { /* use raw text */ }
+    throw new Error(`Failed to create Razorpay payment link: ${resp.status} — ${detail}`);
   }
 
   const data = asPaymentLinkResponse(await resp.json());
