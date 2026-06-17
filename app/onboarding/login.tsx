@@ -109,7 +109,7 @@ export default function LoginScreen() {
         return;
       }
       router.push({ pathname: '/onboarding/phone-verification', params: { phone: formatted } });
-    } catch (err: any) {
+    } catch (err) {
       showAlert('Login error', err?.message ?? String(err) ?? 'An unexpected error occurred.');
     } finally {
       if (isMountedRef.current) setLoading(false);
@@ -183,6 +183,46 @@ export default function LoginScreen() {
     }
   };
 
+  const processLoginUrl = async (url: string) => {
+    const parsed = Linking.parse(url);
+    let code: string | undefined = parsed.queryParams?.code
+      ? Array.isArray(parsed.queryParams.code) ? parsed.queryParams.code[0] : parsed.queryParams.code
+      : undefined;
+
+    if (!code && url.includes('?')) {
+      const query = url.split('?')[1];
+      const params = new URLSearchParams(query);
+      code = params.get('code') ?? undefined;
+    }
+
+    if (code) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+      if (sessionError) throw sessionError;
+      await checkUserAndNavigate(sessionData.session?.user?.id);
+      return;
+    }
+
+    if (url.includes('#access_token')) {
+      const hash = url.split('#')[1] || '';
+      let access_token: string | null = null;
+      let refresh_token: string | null = null;
+      for (const pair of hash.split('&')) {
+        const [k, v] = pair.split('=');
+        if (k === 'access_token' && v) access_token = decodeURIComponent(v);
+        if (k === 'refresh_token' && v) refresh_token = decodeURIComponent(v);
+      }
+      if (access_token && refresh_token) {
+        const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
+        await checkUserAndNavigate(sessionData.session?.user?.id);
+      } else {
+        router.replace('/onboarding/welcome');
+      }
+      return;
+    }
+
+    router.replace('/onboarding/welcome');
+  };
+
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
     if (isLoggingIn) return;
     try {
@@ -238,47 +278,7 @@ export default function LoginScreen() {
       if (error) throw error;
 
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
-        if (result.type === 'success' && result.url) {
-          const parsed = Linking.parse(result.url);
-          let code = parsed.queryParams?.code;
-          
-          if (!code && result.url.includes('?')) {
-             const query = result.url.split('?')[1];
-             const params = new URLSearchParams(query);
-             code = params.get('code');
-          }
-
-        if (code) {
-          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-          if (sessionError) throw sessionError;
-          await checkUserAndNavigate(sessionData.session?.user?.id);
-          return;
-        }
-
-        if (url.includes('#access_token')) {
-          const hash = url.split('#')[1] || '';
-          let access_token: string | null = null;
-          let refresh_token: string | null = null;
-          for (const pair of hash.split('&')) {
-            const [k, v] = pair.split('=');
-            if (k === 'access_token' && v) access_token = decodeURIComponent(v);
-            if (k === 'refresh_token' && v) refresh_token = decodeURIComponent(v);
-          }
-          if (access_token && refresh_token) {
-            const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
-            await checkUserAndNavigate(sessionData.session?.user?.id);
-          } else {
-            router.replace('/onboarding/welcome');
-          }
-          return;
-        }
-
-        router.replace('/onboarding/welcome');
-      };
-
-      if (Platform.OS === 'android') {
+        if (Platform.OS === 'android') {
         // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
         // and shows a permanent white screen. Use the default browser instead.
         const linkingPromise = new Promise<string>((resolve, reject) => {
@@ -309,7 +309,8 @@ export default function LoginScreen() {
           await processLoginUrl(result.url);
         }
       }
-    } catch (err: any) {
+      }
+    } catch (err) {
       if (err?.code === 'ERR_REQUEST_CANCELED') return; // user dismissed Apple sheet — silent
       console.warn('⚠️ Social login error:', err);
       showAlert('Login error', err?.message ?? 'Social login failed. Please try again.');
