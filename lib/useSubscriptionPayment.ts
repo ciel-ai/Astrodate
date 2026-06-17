@@ -247,12 +247,25 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
           const productId = REVENUECAT_PRODUCT_IDS[planSlug];
           const offerings = await Purchases.getOfferings();
           const allPackages = Object.values(offerings.all).flatMap((offering) => offering.availablePackages);
+
+          if (allPackages.length === 0) {
+            // No packages = products not yet live in App Store Connect / RevenueCat dashboard,
+            // or app is running outside TestFlight (development build limitation).
+            throw new Error(
+              'In-app purchases are not available yet. ' +
+              'Please try again after the app is published to TestFlight or the App Store.'
+            );
+          }
+
           const selectedPackage = allPackages.find(
             (candidate) => candidate.product.identifier === productId
           );
 
           if (!selectedPackage) {
-            throw new Error(`RevenueCat package not found for product ${productId}.`);
+            throw new Error(
+              'This subscription plan is not available for purchase right now. ' +
+              'Please try again later or contact support.'
+            );
           }
 
           const { customerInfo } = await Purchases.purchasePackage(selectedPackage);

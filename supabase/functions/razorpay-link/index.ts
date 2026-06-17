@@ -95,31 +95,45 @@ serve(async (req) => {
     const verifiedAmountPaise = planRow.amount_paise;
     const verifiedPlanName = planRow.plan_name;
 
+    const callbackUrl = Deno.env.get('RAZORPAY_CALLBACK_URL') ?? 'https://astrodate.app/payment-success';
     const basicAuth = btoa(`${keyId}:${keySecret}`);
+
+    // Only include customer fields that have real values — Razorpay rejects empty strings
+    const customer: Record<string, string> = {};
+    if (userName) customer.name = userName;
+    if (userEmail) customer.email = userEmail;
+    if (userPhone) customer.contact = userPhone;
+
+    const razorpayPayload: Record<string, unknown> = {
+      amount: verifiedAmountPaise,
+      currency: currency ?? 'INR',
+      accept_partial: false,
+      description: `AstroDate ${verifiedPlanName} Plan`,
+      ...(Object.keys(customer).length > 0 && { customer }),
+      notify: { sms: !!userPhone, email: !!userEmail },
+      reminder_enable: true,
+      notes: { user_id: userId, plan_id: planId, platform: platform ?? 'unknown' },
+      callback_url: callbackUrl,
+      callback_method: 'get',
+    };
+
+    console.log('Creating Razorpay payment link:', JSON.stringify({ amount: verifiedAmountPaise, planId, userId, callbackUrl }));
+
     const razorpayRes = await fetch('https://api.razorpay.com/v1/payment_links', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Basic ${basicAuth}`
       },
-      body: JSON.stringify({
-        amount: verifiedAmountPaise,
-        currency: currency ?? 'INR',
-        accept_partial: false,
-        description: `AstroDate ${verifiedPlanName} Plan`,
-        customer: { name: userName ?? '', email: userEmail ?? '', contact: userPhone ?? '' },
-        notify: { sms: !!userPhone, email: !!userEmail },
-        reminder_enable: true,
-        notes: { user_id: userId, plan_id: planId, platform: platform ?? 'unknown' },
-        callback_url: 'https://astrodate.app/payment-success',
-        callback_method: 'get'
-      })
+      body: JSON.stringify(razorpayPayload),
     });
 
     if (!razorpayRes.ok) {
       const errorData = await razorpayRes.text();
-      console.error('Razorpay API Error:', errorData);
-      return new Response(JSON.stringify({ error: 'Razorpay API Error' }), {
+      console.error('Razorpay API Error:', razorpayRes.status, errorData);
+      let parsedError: unknown;
+      try { parsedError = JSON.parse(errorData); } catch { parsedError = errorData; }
+      return new Response(JSON.stringify({ error: 'Razorpay API Error', detail: parsedError, razorpay_status: razorpayRes.status }), {
         status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
