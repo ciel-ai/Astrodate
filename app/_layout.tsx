@@ -1,4 +1,9 @@
 
+// Global registry for Android Google OAuth deep-link callbacks.
+// login.tsx registers a one-shot callback before opening the browser;
+// the layout's Linking listener fires it when the redirect URL arrives.
+import { dispatchOAuthCallbackIfPending } from '@/lib/oauth-registry';
+
 import { GlobalAuthAlertModal } from '@/components/global-auth-alert-modal';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -301,11 +306,12 @@ function RootLayout() {
     // Warm-start: link opened while app was running
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       console.log('🔗 [Layout] Incoming URL (warm):', url);
-      // On Android, Chrome Custom Tab shows a blank white page when it redirects
-      // to a custom scheme (exp:// or astrodate://). Calling maybeCompleteAuthSession()
-      // here signals any waiting openAuthSessionAsync to close the tab and return
-      // the redirect URL as a successful result.
       WebBrowser.maybeCompleteAuthSession();
+
+      // Android Google OAuth: if login.tsx registered a callback, hand it the URL
+      // and bail out — don't let the email-verify path swallow it.
+      if (dispatchOAuthCallbackIfPending(url)) return;
+
       processVerifyLink(url);
     });
 

@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { registerOAuthCallback, unregisterOAuthCallback } from '@/lib/oauth-registry';
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
@@ -150,7 +151,7 @@ export default function LoginScreen() {
       await supabase.auth.signOut();
       showAlert(
         'Account Not Linked',
-        'This Apple ID is not linked to any account. Log in with your phone number, then go to Settings → Linked Accounts to connect your Apple ID.',
+        'This social account is not linked to any AstroDate account. Log in with your phone number, then go to Settings → Linked Accounts to connect it.',
         [
           { text: 'Log in with Phone', onPress: () => router.replace('/onboarding/login') },
           { text: 'Cancel', style: 'cancel' },
@@ -161,7 +162,7 @@ export default function LoginScreen() {
 
     // Check 3 — no profile anywhere
     if (email) {
-      // Apple provided an email (first-ever sign-in) and no account exists → new user → onboard
+      // New user — no account exists yet → send to onboarding
       router.replace({
         pathname: '/onboarding/basic-details',
         params: {
@@ -170,11 +171,11 @@ export default function LoginScreen() {
         },
       });
     } else {
-      // No email (Apple withholds it after first sign-in) and no profile → cannot identify user
+      // No email and no profile → cannot identify user
       await supabase.auth.signOut();
       showAlert(
         'Account Not Found',
-        'Could not find an account for this Apple ID. Please sign up with your phone number first.',
+        'Could not find an AstroDate account for this sign-in. Please sign up with your phone number first.',
         [
           { text: 'Sign Up', onPress: () => router.replace('/onboarding/signup') },
           { text: 'Cancel', style: 'cancel' },
@@ -254,7 +255,12 @@ export default function LoginScreen() {
         if (code) {
           const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
           if (sessionError) throw sessionError;
-          await checkUserAndNavigate(sessionData.session?.user?.id);
+          const meta = sessionData.session?.user?.user_metadata;
+          await checkUserAndNavigate(
+            sessionData.session?.user?.id,
+            sessionData.session?.user?.email ?? undefined,
+            meta?.full_name ?? meta?.name ?? undefined,
+          );
           return;
         }
 
@@ -269,7 +275,12 @@ export default function LoginScreen() {
           }
           if (access_token && refresh_token) {
             const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
-            await checkUserAndNavigate(sessionData.session?.user?.id);
+            const meta = sessionData.session?.user?.user_metadata;
+            await checkUserAndNavigate(
+              sessionData.session?.user?.id,
+              sessionData.session?.user?.email ?? undefined,
+              meta?.full_name ?? meta?.name ?? undefined,
+            );
           } else {
             router.replace('/onboarding/welcome');
           }
@@ -280,21 +291,20 @@ export default function LoginScreen() {
       };
 
       if (Platform.OS === 'android') {
-        // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
-        // and shows a permanent white screen. Use the default browser instead.
+        // Android: Chrome Custom Tab can't redirect to custom schemes reliably.
+        // We register a one-shot callback in the layout's always-running URL
+        // listener (via the module-level registry) so the deep-link is never
+        // missed due to a listener setup race.
         const linkingPromise = new Promise<string>((resolve, reject) => {
           const timeout = setTimeout(() => {
-            sub.remove();
+            unregisterOAuthCallback();
             reject(new Error('Google sign-in timed out. Please try again.'));
           }, 120_000);
 
-          const sub = Linking.addEventListener('url', ({ url }) => {
-            console.log(`[auth] Android deep link received:`, url);
-            if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
-              clearTimeout(timeout);
-              sub.remove();
-              resolve(url);
-            }
+          registerOAuthCallback((url: string) => {
+            console.log(`[auth] Android OAuth deep link received via registry:`, url);
+            clearTimeout(timeout);
+            resolve(url);
           });
         });
 
@@ -315,6 +325,7 @@ export default function LoginScreen() {
       console.warn('⚠️ Social login error:', err);
       showAlert('Login error', err?.message ?? 'Social login failed. Please try again.');
     } finally {
+      unregisterOAuthCallback(); // clean up any pending callback if flow aborted
       if (isMountedRef.current) setIsLoggingIn(false);
     }
   };
