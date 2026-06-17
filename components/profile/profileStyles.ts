@@ -74,6 +74,7 @@ export const profileStyles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingTop: 16,
+    paddingBottom: 120,
   },
   profileHeaderSection: {
     marginBottom: 24,

@@ -25,7 +25,9 @@ export interface UseFeedActionsProps {
   nextCardBlur: SharedValue<number>;
   resetCardPosition: () => void;
   fetchSuperLikesRemaining: () => Promise<void>;
+  fetchLikesRemaining: () => Promise<void>;
   setShowUpgradeSheet: (val: boolean) => void;
+  setUpgradeReason: (reason: 'likes' | 'super_likes') => void;
   router: ReturnType<typeof useRouter>;
   setMatchedProfile: (profile: Profile | null) => void;
   setMatchedUserId: (id: string | null) => void;
@@ -59,7 +61,9 @@ export function useFeedActions({
   nextCardBlur,
   resetCardPosition,
   fetchSuperLikesRemaining,
+  fetchLikesRemaining,
   setShowUpgradeSheet,
+  setUpgradeReason,
   router,
   setMatchedProfile,
   setMatchedUserId,
@@ -145,10 +149,12 @@ export function useFeedActions({
         });
         translateY.value = withTiming(translateY.value + 20, { duration: 220 });
         opacity.value = withTiming(0, { duration: 200 });
+        void fetchLikesRemaining();
         await checkAndShowMatch(likedUserId, currentProfile);
       } else if (result.error === 'LIKE_QUOTA_EXCEEDED') {
         resetCardPosition();
         setIsTransitioning(false);
+        setUpgradeReason('likes');
         setShowUpgradeSheet(true);
       } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
         console.warn(`⚠️ User ${likedUserId} no longer exists.`);
@@ -182,6 +188,7 @@ export function useFeedActions({
     opacity,
     resetCardPosition,
     setIsTransitioning,
+    fetchLikesRemaining,
     setShowUpgradeSheet,
   ]);
 
@@ -256,7 +263,9 @@ export function useFeedActions({
         void fetchSuperLikesRemaining();
       } else if (result.error === 'SUPER_LIKE_QUOTA_EXCEEDED') {
         resetCardPosition();
+        nextCardBlur.value = withTiming(0, { duration: 150 });
         setIsTransitioning(false);
+        setUpgradeReason('super_likes');
         setShowUpgradeSheet(true);
       } else if (result.error === 'THE_USER_NO_LONGER_EXISTS') {
         console.warn(`⚠️ User ${likedUserId} no longer exists, skipping...`);
@@ -268,11 +277,13 @@ export function useFeedActions({
       } else {
         console.error('Error saving super like:', result.error);
         resetCardPosition();
+        nextCardBlur.value = withTiming(0, { duration: 150 });
         setIsTransitioning(false);
       }
     } catch (error) {
       console.error('Error in handleSuperLike backend:', error);
       resetCardPosition();
+      nextCardBlur.value = withTiming(0, { duration: 150 });
       setIsTransitioning(false);
     }
   }, [
@@ -286,6 +297,7 @@ export function useFeedActions({
     SCREEN_WIDTH,
     translateY,
     opacity,
+    nextCardBlur,
     fetchSuperLikesRemaining,
     resetCardPosition,
     setShowUpgradeSheet,
@@ -327,6 +339,7 @@ export function useFeedActions({
           await checkAndShowMatch(likedUserId, currentProfile);
           void fetchSuperLikesRemaining();
         } else if (result.error === 'SUPER_LIKE_QUOTA_EXCEEDED') {
+          setUpgradeReason('super_likes');
           setShowUpgradeSheet(true);
         } else if (result.error !== 'THE_USER_NO_LONGER_EXISTS') {
           console.error('Error saving super_like from swipe-up:', result.error);
@@ -343,11 +356,13 @@ export function useFeedActions({
       if (result.success) {
         if (actionType === 'like') {
           signalLike(likedUserId);
+          void fetchLikesRemaining();
           await checkAndShowMatch(likedUserId, currentProfile);
         } else {
           signalDislike(likedUserId);
         }
       } else if (result.error === 'LIKE_QUOTA_EXCEEDED') {
+        setUpgradeReason('likes');
         setShowUpgradeSheet(true);
       } else if (result.error !== 'THE_USER_NO_LONGER_EXISTS') {
         console.error(`Error saving ${actionType} from swipe:`, result.error);
@@ -355,7 +370,7 @@ export function useFeedActions({
     } catch (error) {
       console.error(`Error saving ${actionType} from swipe:`, error);
     }
-  }, [profiles, currentProfileIndex, checkAndShowMatch, fetchSuperLikesRemaining, setShowUpgradeSheet]);
+  }, [profiles, currentProfileIndex, checkAndShowMatch, fetchSuperLikesRemaining, fetchLikesRemaining, setShowUpgradeSheet, setUpgradeReason]);
 
   const submitReport = useCallback(
     async (reason: string) => {

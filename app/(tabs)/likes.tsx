@@ -225,7 +225,7 @@ export default function LikesScreen() {
 
     getMembershipOrFree().then((m) => {
       const features = m.features as any;
-      if (mounted) setCanSeeWhoLikedMe(!!features?.see_who_liked_me && m.is_active);
+      if (mounted) setCanSeeWhoLikedMe(!!features?.see_who_likes_you && m.is_active);
     }).catch(() => { });
 
     // Helper: calculate age from ISO birth_date string
@@ -603,7 +603,7 @@ export default function LikesScreen() {
                                 Upgrade to see who liked you
                               </Text>
                               <TouchableOpacity
-                                onPress={() => router.push('/(tabs)/profile')}
+                                onPress={() => router.push('/subscription')}
                                 style={{ marginTop: 10, backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 }}
                                 activeOpacity={0.8}>
                                 <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>View Plans</Text>
@@ -682,10 +682,10 @@ export default function LikesScreen() {
                             }}>
                               <Text style={{ color: '#FFD700', fontSize: 18, fontWeight: 'bold' }}>⭐</Text>
                               <Text style={{ color: '#FFFFFF', fontSize: 13, marginTop: 4, textAlign: 'center', paddingHorizontal: 12 }}>
-                                Upgrade to see who liked you
+                                Upgrade to see who super-liked you
                               </Text>
                               <TouchableOpacity
-                                onPress={() => router.push('/(tabs)/profile')}
+                                onPress={() => router.push('/subscription')}
                                 style={{ marginTop: 10, backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 }}
                                 activeOpacity={0.8}>
                                 <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600' }}>View Plans</Text>

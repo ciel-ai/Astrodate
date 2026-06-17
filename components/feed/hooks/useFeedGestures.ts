@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { Dimensions } from 'react-native';
 import { Gesture } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
@@ -82,8 +81,6 @@ export function useFeedGestures({
       }
     });
 
-  const SCREEN_HEIGHT = Dimensions.get('window').height;
-
   const panGesture = Gesture.Pan()
     .enabled(!isFlipped && !isTransitioning)
     .activeOffsetX([-20, 20])
@@ -104,15 +101,14 @@ export function useFeedGestures({
       'worklet';
       const velocityX = event.velocityX;
 
-      // Swipe-up gesture = super-like
+      // Swipe-up gesture = super-like.
+      // Route through onSuperLike (handleSuperLike) so quota is checked before
+      // the card animates. handleSuperLike animates on success and calls
+      // resetCardPosition + shows upgrade sheet on quota exceeded — no orphaned
+      // index advance and no card stuck off-screen.
       const isSwipeUp = translateY.value < -120 && Math.abs(translateX.value) < 60;
       if (isSwipeUp) {
-        runOnJS(setIsTransitioning)(true);
-        runOnJS(onSwipe)('up');
-        translateY.value = withTiming(-(SCREEN_HEIGHT + 120), { duration: 260 }, (finished) => {
-          if (finished) runOnJS(updateProfileIndex)();
-        });
-        opacity.value = withTiming(0, { duration: 200 });
+        runOnJS(onSuperLike)();
         return;
       }
 

@@ -21,25 +21,25 @@ const AstroBadges = memo(function AstroBadges({
   return (
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {westernSign && (
+        {!!westernSign && (
           <View style={styles.badge}>
             <Ionicons name="moon-outline" size={12} color="#D8B4FE" />
             <Text style={styles.badgeText}>{westernSign}</Text>
           </View>
         )}
-        {sunSignHarmony && (
+        {!!sunSignHarmony && (
           <View style={styles.badge}>
             <Ionicons name="sunny-outline" size={14} color="#FBBF24" />
             <Text style={styles.badgeText}>{sunSignHarmony}</Text>
           </View>
         )}
-        {moonSignAlignment && (
+        {!!moonSignAlignment && (
           <View style={styles.badge}>
             <Ionicons name="moon" size={12} color="#FBBF24" />
             <Text style={styles.badgeText}>{moonSignAlignment}</Text>
           </View>
         )}
-        {indianSign && (
+        {!!indianSign && (
           <View style={styles.badge}>
             <Ionicons name="sparkles" size={12} color="#D8B4FE" />
             <Text style={styles.badgeText}>High Energy</Text>

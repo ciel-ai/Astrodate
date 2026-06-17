@@ -28,7 +28,7 @@ export default function EssentialsGrid({ profile }: EssentialsGridProps) {
           </View>
         )}
 
-        {profile.location && (
+        {!!profile.location && (
           <View style={styles.card}>
             <View style={styles.cardIcon}>
               <Ionicons name="home-outline" size={18} color="#D8B4FE" />
@@ -42,7 +42,7 @@ export default function EssentialsGrid({ profile }: EssentialsGridProps) {
           </View>
         )}
 
-        {profile.gender && (
+        {!!profile.gender && (
           <View style={styles.card}>
             <View style={styles.cardIcon}>
               <Ionicons name="person-outline" size={18} color="#D8B4FE" />

@@ -187,7 +187,7 @@ export default function SubscriptionScreen() {
     paise === 0 ? 'Free forever' : `₹${(paise / 100).toFixed(0)} / mo`;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -200,6 +200,7 @@ export default function SubscriptionScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        contentInsetAdjustmentBehavior="automatic"
       >
         {/* Hero */}
         <View style={styles.hero}>
@@ -423,7 +424,7 @@ const styles = StyleSheet.create({
 
   // Scroll
   scrollContent: {
-    paddingBottom: 60,
+    paddingBottom: 140,
   },
 
   // Hero

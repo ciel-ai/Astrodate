@@ -218,6 +218,7 @@ export default function DiscoverScreen() {
     setReportedUserIds,
     superlikedProfiles,
     superLikesRemaining,
+    likesRemaining,
     unreadCount,
     currentUserPhoto,
     currentUserAstro,
@@ -226,6 +227,7 @@ export default function DiscoverScreen() {
     activeAstroEvent,
     setActiveAstroEvent,
     fetchSuperLikesRemaining,
+    fetchLikesRemaining,
     loadDiscoverProfiles,
     selectedInsightTab,
     setSelectedInsightTab,
@@ -246,6 +248,7 @@ export default function DiscoverScreen() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showReportReasonModal, setShowReportReasonModal] = useState(false);
   const [showUpgradeSheet, setShowUpgradeSheet] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<'likes' | 'super_likes'>('super_likes');
   const [reportingProfile, setReportingProfile] = useState<Profile | null>(null);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
@@ -365,7 +368,9 @@ export default function DiscoverScreen() {
     nextCardBlur,
     resetCardPosition,
     fetchSuperLikesRemaining,
+    fetchLikesRemaining,
     setShowUpgradeSheet,
+    setUpgradeReason,
     router,
     setMatchedProfile,
     setMatchedUserId,
@@ -784,6 +789,7 @@ export default function DiscoverScreen() {
           onSuperLike={handleSuperLike}
           isTransitioning={isTransitioning}
           superLikesRemaining={superLikesRemaining}
+          likesRemaining={likesRemaining}
           bottom={dynamicActionButtonsBottom}
           dislikeButtonScale={dislikeButtonScale}
           dislikeButtonColorStyle={dislikeButtonColorStyle}
@@ -1014,22 +1020,26 @@ export default function DiscoverScreen() {
       >
         <View style={styles.upgradeSheetOverlay}>
           <View style={styles.upgradeSheetContainer}>
-            <Text style={styles.upgradeSheetTitle}>⭐ Shooting Stars Used Up</Text>
-            <Text style={styles.upgradeSheetMessage}>
-              You've used all your Shooting Stars. Upgrade to Astro+ or AstroX for more.
-            </Text>
-            {superLikesRemaining !== null && superLikesRemaining < 999 && (
-              <Text style={styles.upgradeSheetRemainingText}>
-                {superLikesRemaining === 0
-                  ? '0 left this week'
-                  : `${superLikesRemaining} left this week`}
-              </Text>
+            {upgradeReason === 'likes' ? (
+              <>
+                <Text style={styles.upgradeSheetTitle}>❤️ Daily Likes Used Up</Text>
+                <Text style={styles.upgradeSheetMessage}>
+                  You've used all your free daily likes. Upgrade to Astro+ or AstroX for unlimited likes.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.upgradeSheetTitle}>⭐ Shooting Stars Used Up</Text>
+                <Text style={styles.upgradeSheetMessage}>
+                  You've used all your Shooting Stars for today. Upgrade to Astro+ or AstroX for more.
+                </Text>
+              </>
             )}
             <TouchableOpacity
               style={styles.upgradeButton}
               onPress={() => {
                 setShowUpgradeSheet(false);
-                router.push('/(tabs)/profile');
+                router.push('/subscription');
               }}
             >
               <Text style={styles.upgradeButtonText}>View Plans</Text>
