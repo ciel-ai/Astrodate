@@ -10,7 +10,7 @@
     "ios": {
       "usesAppleSignIn": true,
       "buildNumber": "2",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.cielinfitech.astrodate",
       "infoPlist": {
         "NSCameraUsageDescription": "AstroDate needs access to your camera so you can take profile photos and capture pictures to share in chats.",

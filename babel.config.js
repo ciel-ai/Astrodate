@@ -6,8 +6,7 @@ module.exports = function (api) {
     return {
         presets: ['babel-preset-expo'],
         plugins: [
-            // Strip all console.log/warn/error calls in production builds.
-            // Has zero effect on development — logs still appear normally.
+            // Strip console.log in production but preserve error/warn for crash visibility.
             ...(isProduction ? [['transform-remove-console', { exclude: ['error', 'warn'] }]] : []),
         ],
     };

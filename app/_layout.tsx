@@ -148,10 +148,6 @@ function RootLayout() {
 
     const bootstrap = async () => {
       try {
-        if (Platform.OS === 'ios') {
-          const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');
-          await requestTrackingPermissionsAsync();
-        }
         await ensureRevenueCatConfigured(); // init once here
 
         // ── Cold-start Deep Link Interception ───────────────────────────────────
@@ -160,7 +156,7 @@ function RootLayout() {
         // This prevents the React Navigation routing crash by routing directly via finishBoot.
         try {
           const initialUrl = await Linking.getInitialURL();
-          if (initialUrl) {
+          if (initialUrl && initialUrl.startsWith('astrodate://')) {
             console.log('🔗 [Layout] Initial URL detected during bootstrap:', initialUrl);
             const hasStrictType = initialUrl.includes('&type=') || initialUrl.includes('?type=');
             const isEmailVerificationLink = 
@@ -289,27 +285,11 @@ function RootLayout() {
   }, [isNavigationReady, bootRoute, safeReplace]);
 
   useEffect(() => {
-    const responseListener = Notifications.addNotificationResponseReceivedListener((response: { notification: { request: { content: { data: any; }; }; }; }) => {
-      const data = response.notification.request.content.data as any;
-      if (data?.type === 'new_message' && data?.chat_id) {
-        router.push({
-          pathname: '/chat/[id]',
-          params: { id: data.chat_id }
-        });
-      } else if (data?.type === 'new_match' && data?.chat_id) {
-        router.push({
-          pathname: '/chat/[id]',
-          params: { id: data.chat_id }
-        });
-      }
-    });
-
     const cleanup = setupNotificationListeners();
     return () => {
-      responseListener.remove();
       if (typeof cleanup === 'function') cleanup();
     };
-  }, [router]);
+  }, []);
 
   // ─── DEEP LINK HANDLER ──────────────────────────────────────────────────────
   //
@@ -321,6 +301,7 @@ function RootLayout() {
   // handles the full token exchange + routing logic. This keeps the layout clean.
 
   const processDeepLink = useCallback((url: string) => {
+    if (!url.startsWith('astrodate://')) return;
     if (!isMountedRef.current || processedDeepLinkRef.current === url) return;
 
     const currentRoute = routeFromSegments();
