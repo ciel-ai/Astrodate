@@ -245,12 +245,19 @@ export default function ChatsScreen() {
   const chatsCountRef = useRef(0);
   const chatsRef = useRef<ChatItem[]>([]);
   const isMountedRef = useRef(true);
+  const maxLoadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Safety net: never show the loading spinner for more than 8 seconds
+    maxLoadingTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) setLoading(false);
+    }, 8000);
     return () => {
       isMountedRef.current = false;
+      if (maxLoadingTimerRef.current) clearTimeout(maxLoadingTimerRef.current);
     };
   }, []);
+
 
   useEffect(() => {
     chatsCountRef.current = chats.length;
@@ -513,6 +520,8 @@ export default function ChatsScreen() {
           if (authRetryCountRef.current >= MAX_AUTH_RETRIES) {
             console.warn('[Chats] Max auth retries reached');
             authRetryCountRef.current = 0;
+            // Stop showing the spinner after exhausting retries
+            if (isMountedRef.current) setLoading(false);
             return;
           }
           authRetryCountRef.current++;

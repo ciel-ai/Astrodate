@@ -425,6 +425,7 @@ export function useFeedData() {
         ? filteredHighQualityMatches
         : normalizedMatches
           .filter((u: FinalMatchResult) => !reportedSet.has(String(u.match_user_id || '')))
+          .filter((u: FinalMatchResult) => candidateMatchesInterest(u, interest))
           .filter((u: FinalMatchResult) => candidateWithinDiscoveryPreferences(u, discoveryPrefs));
 
       const nonReportedFinalResults = baseHighQualityMatches.filter(
