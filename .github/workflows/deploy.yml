@@ -1,0 +1,71 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+      submit_ios:
+        description: Submit iOS to App Store?
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  build-and-deploy:
+    name: EAS Build & Submit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: astrozip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: astrozip/package-lock.json
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Build Android — AAB stored on EAS dashboard, download manually to upload to Play Store
+      - name: Build Android (production)
+        if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android' || github.event_name == 'push' }}
+        run: eas build --platform android --profile production --non-interactive
+
+      # Build iOS
+      - name: Build iOS (production)
+        if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' || github.event_name == 'push' }}
+        run: eas build --platform ios --profile production --non-interactive
+
+      # Submit iOS to App Store
+      - name: Submit iOS to App Store
+        if: |
+          (github.event.inputs.submit_ios != 'false') &&
+          (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' || github.event_name == 'push')
+        run: eas submit --platform ios --profile production --latest --non-interactive
