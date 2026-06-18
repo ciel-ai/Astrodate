@@ -201,11 +201,9 @@ export const saveUserProfile = async (profile: UserProfile) => {
       if (hasPhoneInput && normalizedPhone) {
         insertPayload.phone_number = normalizedPhone;
       } else {
-        // If phone is missing on first insert, set to null-safe placeholder only if schema allows.
-        // Since schema defines phone_number NOT NULL, we need to avoid insert without phone.
-        // In this case, attempt to fetch existing row by user_id; if none, return a clear error.
-        console.warn('⚠️ Phone number missing on insert and schema requires NOT NULL');
-        return { success: false, error: 'Phone number is required to create profile. Please complete phone verification.' };
+        // Social/OAuth users (Google, Apple) may not have a phone number.
+        // Store empty string — the schema requires NOT NULL but allows ''.
+        insertPayload.phone_number = '';
       }
 
       result = await supabase

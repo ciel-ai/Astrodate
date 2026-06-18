@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS public.daily_like_quota (
 
 ALTER TABLE public.daily_like_quota ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users manage own like quota" ON public.daily_like_quota;
 CREATE POLICY "Users manage own like quota" ON public.daily_like_quota
   FOR ALL USING (auth.uid() = user_id);
 

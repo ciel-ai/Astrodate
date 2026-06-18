@@ -9,7 +9,6 @@ import { supabase, SUPABASE_URL } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import { makeRedirectUri } from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
@@ -97,22 +96,22 @@ const GENDER_DETAILS: Record<GenderOption, GenderDetailOption[]> = {
 };
 
 const COLORS = {
-  background: '#FFFFFF',
-  textPrimary: '#1B1528',
-  textSecondary: '#6B7280',
-  accent: '#4B0082',
-  accentLight: '#6A0DAD',
-  accentSoft: '#F3ECFF',
-  border: '#E5E7EB',
+  background: '#12082A',
+  textPrimary: '#EDE8FF',
+  textSecondary: '#A89BC2',
+  accent: '#A855F7',
+  accentLight: '#C084FC',
+  accentSoft: 'rgba(168,85,247,0.15)',
+  border: 'rgba(255,255,255,0.1)',
   success: '#10B981',
 };
 
 export default function BasicDetailsScreen() {
   const navigation: any = useNavigation();
-  const params = useLocalSearchParams<{ phone: string }>();
+  const params = useLocalSearchParams<{ phone?: string; prefillEmail?: string; prefillName?: string }>();
   const [stepIndex, setStepIndex] = useState(0);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState(params.prefillName ?? '');
+  const [email, setEmail] = useState(params.prefillEmail ?? '');
   const [location, setLocation] = useState('');
   const [gender, setGender] = useState<GenderOption | null>(null);
   const [genderDetail, setGenderDetail] = useState<string | null>(null);
@@ -132,6 +131,107 @@ export default function BasicDetailsScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false);
+
+  // Load draft basic details from AsyncStorage on mount
+  useEffect(() => {
+    const loadDraft = async () => {
+      try {
+        const draftStr = await AsyncStorage.getItem('basic_details_draft');
+        if (draftStr) {
+          const draft = JSON.parse(draftStr);
+          console.log('📬 [basic-details] Loaded draft from storage:', draft);
+          if (draft.fullName) setFullName(draft.fullName);
+          if (draft.email) setEmail(draft.email);
+          if (draft.location) setLocation(draft.location);
+          if (draft.gender) setGender(draft.gender);
+          if (draft.genderDetail) setGenderDetail(draft.genderDetail);
+          if (typeof draft.stepIndex === 'number') setStepIndex(draft.stepIndex);
+        }
+      } catch (err) {
+        console.warn('Error loading basic details draft:', err);
+      } finally {
+        setIsDraftLoaded(true);
+      }
+    };
+    loadDraft();
+  }, []);
+
+  // Save basic details draft to AsyncStorage whenever input state changes
+  useEffect(() => {
+    if (!isDraftLoaded) return;
+
+    const saveDraft = async () => {
+      try {
+        const draft = {
+          fullName,
+          email,
+          location,
+          gender,
+          genderDetail,
+          stepIndex,
+        };
+        await AsyncStorage.setItem('basic_details_draft', JSON.stringify(draft));
+      } catch (err) {
+        console.warn('Error saving basic details draft:', err);
+      }
+    };
+    saveDraft();
+  }, [fullName, email, location, gender, genderDetail, stepIndex, isDraftLoaded]);
+
+  useEffect(() => {
+    const checkLinkedEmail = async () => {
+      try {
+        const storedEmail = await AsyncStorage.getItem('oauth_linked_email');
+        if (storedEmail) {
+          console.log('📬 [basic-details] Found linked email in storage:', storedEmail);
+          setEmail(storedEmail);
+          setErrors((prev) => ({ ...prev, email: '' }));
+          setStepIndex(2); // Move to gender step after email verification
+          await AsyncStorage.removeItem('oauth_linked_email');
+        }
+      } catch (err) {
+        console.warn('Error checking linked email:', err);
+      }
+    };
+
+    checkLinkedEmail();
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      checkLinkedEmail();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  // Recovery check: if user already has linked Google email/identities, pre-fill email state
+  useEffect(() => {
+    const checkCurrentUserSessionEmail = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && !email) {
+          let foundEmail = user.email;
+          if (user.identities) {
+            const googleIdentity = user.identities.find((id: any) => id.provider === 'google');
+            if (googleIdentity?.identity_data?.email) {
+              foundEmail = googleIdentity.identity_data.email;
+            }
+          }
+          if (foundEmail && isMountedRef.current) {
+            console.log('📬 [basic-details] Recovered email from current session user:', foundEmail);
+            setEmail(foundEmail);
+            setErrors((prev) => ({ ...prev, email: '' }));
+          }
+        }
+      } catch (err) {
+        console.warn('Error checking current session email on mount:', err);
+      }
+    };
+    if (isDraftLoaded) {
+      checkCurrentUserSessionEmail();
+    }
+  }, [isDraftLoaded, email]);
 
   useEffect(() => {
     return () => {
@@ -271,6 +371,38 @@ export default function BasicDetailsScreen() {
         // Use console.warn instead of console.error to prevent Expo's duplicate error toast in dev mode
         console.warn('⚠️ Failed to save profile:', result.error);
         
+        const errorMsg = result.error || '';
+        const msg = errorMsg.toLowerCase();
+        const isStaleUser = msg.includes('sub claim') || 
+                            msg.includes('user_not_found') || 
+                            msg.includes('user not found') ||
+                            msg.includes('user not authenticated') ||
+                            msg.includes('session missing') ||
+                            msg.includes('jwt');
+
+        if (isStaleUser) {
+          showAlert(
+            'Session Expired',
+            'Your login session is invalid or has expired. Please sign in again.',
+            [
+              {
+                text: 'OK',
+                onPress: async () => {
+                  try {
+                    await supabase.auth.signOut();
+                    await AsyncStorage.removeItem('userBasicDetails');
+                  } catch (signOutErr) {
+                    console.warn('Sign out error:', signOutErr);
+                  }
+                  router.replace('/onboarding/welcome');
+                }
+              }
+            ]
+          );
+          if (isMountedRef.current) setIsSaving(false);
+          return;
+        }
+
         if (result.error?.includes('Phone number is required')) {
           showAlert(
             'Error',
@@ -294,6 +426,7 @@ export default function BasicDetailsScreen() {
       }
 
       console.log('✅ Profile saved successfully');
+      await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
       router.push('/onboarding/birth-details');
     } catch (error) {
       console.warn('Failed to persist basic details', error);
@@ -306,6 +439,7 @@ export default function BasicDetailsScreen() {
 
   const handleBack = async () => {
     if (stepIndex === 0) {
+      await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
       if (router.canGoBack()) {
         router.back();
       } else {
@@ -399,6 +533,7 @@ export default function BasicDetailsScreen() {
       }
 
       // ── Google OAuth (and Apple web OAuth if ever enabled for Android) ────────
+      await AsyncStorage.setItem('oauth_flow_action', 'link');
       const redirectUrl = Linking.createURL('auth/callback');
       console.log(`🔗 [auth] Starting ${provider} link with redirect:`, redirectUrl);
 
@@ -411,75 +546,54 @@ export default function BasicDetailsScreen() {
       });
 
       if (error) throw error;
-      if (!data?.url) return;
-
-      // Processes the OAuth callback URL and extracts the linked email
-      const processAuthUrl = async (url: string) => {
-        console.log(`[auth] Processing auth URL for ${provider}`);
-
-        if (url.includes('error=')) {
-          let errorDesc: string | null = null;
-          const part = url.includes('#') ? url.split('#')[1] : url.split('?')[1] || '';
-          for (const pair of part.split('&')) {
-            const [k, v] = pair.split('=');
-            if ((k === 'error_description' || k === 'error') && v) { errorDesc = decodeURIComponent(v); break; }
-          }
-          if (errorDesc) throw new Error(errorDesc);
-        }
-
-        // Supabase already linked the identity server-side before redirecting back.
-        // Fetch the updated user to confirm and get the email.
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError) throw userError;
-
-        let linkedEmail = userData?.user?.email;
-        if (userData?.user?.identities) {
-          const pi = userData.user.identities.find((id: any) => id.provider === provider);
-          if (pi?.identity_data?.email) linkedEmail = pi.identity_data.email;
-        }
-
-        if (linkedEmail && isMountedRef.current) {
-          console.log(`[auth] Got email:`, linkedEmail);
-          setEmail(linkedEmail);
-          setErrors((prev) => ({ ...prev, email: '' }));
-          setStepIndex((prev) => prev + 1);
+      if (data?.url) {
+        if (Platform.OS === 'android') {
+          console.log('➡️ [auth] Android: Opening external browser via Linking.openURL...');
+          await Linking.openURL(data.url);
         } else {
-          throw new Error(`Could not find email in your ${provider} account.`);
-        }
-      };
-
-      if (Platform.OS === 'android') {
-        // On Android, open the full browser (not Custom Tab) so the OS can detect
-        // and route the astrodate://auth/callback deep link back to the app.
-        const linkingPromise = new Promise<string>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            sub.remove();
-            reject(new Error('Sign-in timed out. Please try again.'));
-          }, 120_000);
-
-          const sub = Linking.addEventListener('url', ({ url }) => {
-            console.log(`[auth] Android deep link received:`, url);
-            if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
-              clearTimeout(timeout);
-              sub.remove();
-              resolve(url);
-            }
-          });
-        });
-
-        await Linking.openURL(data.url);
-        const authUrl = await linkingPromise;
-        await processAuthUrl(authUrl);
-      } else {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log(`[auth] Browser result: ${result.type}`);
-        if (result.type === 'success' && result.url) {
-          await processAuthUrl(result.url);
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          console.log('📱 [auth] Link Identity browser session result:', result.type);
+          if (result.type === 'success' && result.url) {
+            console.log('➡️ [auth] Redirect URL captured from browser, routing manually...');
+            const queryParams = result.url.split('?')[1] || '';
+            const hashParams = result.url.includes('#') ? `#${result.url.split('#')[1]}` : '';
+            router.replace(`/auth/callback?${queryParams}${hashParams}`);
+          }
         }
       }
     } catch (err: any) {
+      await AsyncStorage.removeItem('oauth_flow_action').catch(() => {});
       if (err?.code === 'ERR_REQUEST_CANCELED') return;
       console.warn(`⚠️ ${provider} verify error:`, err);
+      
+      const msg = (err?.message || '').toLowerCase();
+      const isStaleUser = msg.includes('sub claim') || 
+                          msg.includes('user_not_found') || 
+                          msg.includes('user not found') ||
+                          (err?.status === 400 && msg.includes('jwt'));
+      
+      if (isStaleUser) {
+        showAlert(
+          'Session Expired',
+          'Your login session is invalid or has expired. Please sign in again.',
+          [
+            {
+              text: 'OK',
+              onPress: async () => {
+                try {
+                  await supabase.auth.signOut();
+                  await AsyncStorage.removeItem('userBasicDetails');
+                } catch (signOutErr) {
+                  console.warn('Sign out error:', signOutErr);
+                }
+                router.replace('/onboarding/welcome');
+              }
+            }
+          ]
+        );
+        return;
+      }
+      
       showAlert('Verification Failed', err.message || `Could not connect ${provider}. Please try again.`);
     } finally {
       if (isMountedRef.current) setIsLinkingGoogle(false);
@@ -550,7 +664,7 @@ export default function BasicDetailsScreen() {
               disabled={locationLoading}
               style={{ marginLeft: 8 }}
             >
-              <MaterialIcons name="location-on" size={24} color="#4B0082" />
+              <MaterialIcons name="location-on" size={24} color={COLORS.accent} />
             </TouchableOpacity>
           </View>
           {errors[currentStep.id] ? <Text style={styles.errorText}>{errors[currentStep.id]}</Text> : null}
@@ -719,7 +833,7 @@ export default function BasicDetailsScreen() {
                 {isSaving ? (
                   <Text style={styles.fabText}>...</Text>
                 ) : (
-                  <MaterialIcons name="check" size={22} color={COLORS.background} />
+                  <MaterialIcons name="check" size={22} color="#FFFFFF" />
                 )}
               </TouchableOpacity>
             </View>
@@ -1008,13 +1122,13 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   fabText: {
-    color: COLORS.background,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
   feedbackOverlay: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
   feedbackSheet: {
@@ -1057,7 +1171,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   feedbackButtonText: {
-    color: COLORS.background,
+    color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 16,
   },

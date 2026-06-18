@@ -28,18 +28,30 @@ export default function DeleteAccountScreen() {
             // Deactivate push token first before account deletion
             await deactivateCurrentDevicePushToken().catch(console.warn);
 
-            const { error } = await supabase.functions.invoke('delete-user-account', {
+            const { data: fnData, error } = await supabase.functions.invoke('delete-user-account', {
               headers: {
                 Authorization: `Bearer ${token}`
               }
             });
 
-            if (error) throw error;
+            if (error) {
+              // Extract detailed error from response context if available
+              let errMsg = error.message || 'Failed to delete account';
+              if (error.context) {
+                try {
+                  const errBody = await error.context.json?.() || error.context;
+                  if (errBody?.error) errMsg = errBody.error;
+                  console.error('Edge function error detail:', JSON.stringify(errBody));
+                } catch {}
+              }
+              console.error('Delete account error:', error, 'Details:', errMsg);
+              throw new Error(errMsg);
+            }
             
             await supabase.auth.signOut();
             // Auth listener will handle redirection
           } catch (err: any) {
-            console.error('Delete account error:', err);
+            console.error('Delete account error full:', err);
             showAlert('Error', err.message || 'Failed to delete account. Please try again later.');
             setLoading(false);
           }

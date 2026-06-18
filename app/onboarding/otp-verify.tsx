@@ -3,7 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const COLORS = {
   background: '#FFFFFF',
@@ -192,6 +194,7 @@ export default function OTPVerifyScreen() {
         }
 
         // Success — proceed to onboarding
+        await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
         router.replace({
           pathname: '/onboarding/basic-details',
           params: { phone: phoneNumber }

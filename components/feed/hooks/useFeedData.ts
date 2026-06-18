@@ -327,7 +327,9 @@ export function useFeedData() {
         const personality = rawPersonality === undefined ? undefined : rawPersonality <= 1 ? rawPersonality * 100 : rawPersonality;
 
         let interests: string[] = [];
-        if (onboardingData?.interests) {
+        if (section1Data?.hobbies && Array.isArray(section1Data.hobbies) && section1Data.hobbies.length > 0) {
+          interests = section1Data.hobbies;
+        } else if (onboardingData?.interests) {
           try { interests = typeof onboardingData.interests === 'string' ? JSON.parse(onboardingData.interests) : Array.isArray(onboardingData.interests) ? onboardingData.interests : []; }
           catch { interests = []; }
         }

@@ -1,5 +1,7 @@
 import { saveAstroDetails } from '@/lib/astro-details';
 import { supabase } from '@/lib/supabase';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -49,85 +51,237 @@ const formatSignLabel = (sign?: string | null) => {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
-// Personality Descriptions for Western Zodiac Signs
-const WESTERN_PERSONALITY_DESCRIPTIONS: Record<string, string> = {
-  'Aries': 'Bold, confident, and natural leader. Energetic and passionate with a pioneering spirit.',
-  'Taurus': 'Stable, reliable, and sensual. Values comfort and security with a strong appreciation for beauty.',
-  'Gemini': 'Curious, adaptable, and communicative. Quick-witted and loves learning and socializing.',
-  'Cancer': 'Intuitive, nurturing, and deeply emotional. Values home and family with strong protective instincts.',
-  'Leo': 'Bold, confident, and charismatic. Natural leader with a warm heart and generous spirit.',
-  'Virgo': 'Analytical, practical, and detail-oriented. Perfectionist with a strong sense of duty.',
-  'Libra': 'Diplomatic, balanced, and harmony-seeking. Values relationships and aesthetic beauty.',
-  'Scorpio': 'Intense, passionate, and mysterious. Deeply emotional with strong intuition and determination.',
-  'Sagittarius': 'Adventurous, optimistic, and freedom-loving. Philosophical with a love for exploration.',
-  'Capricorn': 'Ambitious, disciplined, and responsible. Practical and goal-oriented with strong leadership qualities.',
-  'Aquarius': 'Independent, innovative, and humanitarian. Forward-thinking with a unique perspective.',
-  'Pisces': 'Compassionate, intuitive, and artistic. Dreamy and empathetic with strong creative abilities.',
+// Western Zodiac Taglines
+const WESTERN_TAGLINES: Record<string, string> = {
+  'Aries': 'The Pioneer',
+  'Taurus': 'The Anchor',
+  'Gemini': 'The Alchemist',
+  'Cancer': 'The Protector',
+  'Leo': 'The Sovereign',
+  'Virgo': 'The Perfectionist',
+  'Libra': 'The Harmonizer',
+  'Scorpio': 'The Mystic',
+  'Sagittarius': 'The Seeker',
+  'Capricorn': 'The Mastermind',
+  'Aquarius': 'The Visionary',
+  'Pisces': 'The Dreamer',
 };
 
-// Personality Descriptions for Vedic Zodiac Signs (Rashi)
-const VEDIC_PERSONALITY_DESCRIPTIONS: Record<string, string> = {
-  'Mesha': 'Bold, confident, and natural leader. Energetic and passionate with a pioneering spirit.',
-  'Vrishabha': 'Stable, reliable, and sensual. Values comfort and security with a strong appreciation for beauty.',
-  'Mithuna': 'Curious, adaptable, and communicative. Quick-witted and loves learning and socializing.',
-  'Karka': 'Intuitive, nurturing, and deeply emotional. Values home and family with strong protective instincts.',
-  'Simha': 'Bold, confident, and charismatic. Natural leader with a warm heart and generous spirit.',
-  'Kanya': 'Analytical, practical, and detail-oriented. Perfectionist with a strong sense of duty.',
-  'Tula': 'Diplomatic, balanced, and harmony-seeking. Values relationships and aesthetic beauty.',
-  'Vrishchika': 'Intense, passionate, and mysterious. Deeply emotional with strong intuition and determination.',
-  'Dhanu': 'Adventurous, optimistic, and freedom-loving. Philosophical with a love for exploration.',
-  'Makara': 'Ambitious, disciplined, and responsible. Practical and goal-oriented with strong leadership qualities.',
-  'Kumbha': 'Independent, innovative, and humanitarian. Forward-thinking with a unique perspective.',
-  'Meena': 'Compassionate, intuitive, and artistic. Dreamy and empathetic with strong creative abilities.',
+// Vedic Zodiac Taglines
+const VEDIC_TAGLINES: Record<string, string> = {
+  'Mesha': 'The Pioneer',
+  'Vrishabha': 'The Anchor',
+  'Mithuna': 'The Alchemist',
+  'Karka': 'The Protector',
+  'Simha': 'The Sovereign',
+  'Kanya': 'The Perfectionist',
+  'Tula': 'The Harmonizer',
+  'Vrishchika': 'The Mystic',
+  'Dhanu': 'The Seeker',
+  'Makara': 'The Mastermind',
+  'Kumbha': 'The Visionary',
+  'Meena': 'The Dreamer',
 };
 
-// Personality Descriptions for Nakshatras
-const NAKSHATRA_PERSONALITY_DESCRIPTIONS: Record<string, string> = {
-  'Ashwini': 'Energetic and quick-acting. Natural healer with a pioneering spirit and strong willpower.',
-  'Bharani': 'Intense and passionate. Strong sense of responsibility with creative and transformative energy.',
-  'Krittika': 'Sharp and focused. Ambitious with a cutting-edge approach and strong determination.',
-  'Rohini': 'Charming and materialistic. Values beauty and comfort with strong sensual nature.',
-  'Mrigashira': 'Curious and restless. Seeker of knowledge with a wandering and exploring spirit.',
-  'Ardra': 'Intense and transformative. Emotional depth with the ability to overcome challenges.',
-  'Punarvasu': 'Optimistic and resourceful. Ability to renew and restore with a philosophical nature.',
-  'Pushya': 'Nurturing and protective. Strong sense of duty with caring and supportive qualities.',
-  'Ashlesha': 'Intense and mysterious. Deep emotional intelligence with transformative power.',
-  'Magha': 'Regal and ambitious. Strong leadership qualities with respect for tradition and authority.',
-  'Purva Phalguni': 'Creative and romantic. Loves pleasure and beauty with an artistic nature.',
-  'Uttara Phalguni': 'Generous and noble. Strong sense of duty with leadership and service qualities.',
-  'Hasta': 'Skillful and dexterous. Quick-witted with excellent communication and creative abilities.',
-  'Chitra': 'Artistic and charismatic. Loves beauty and perfection with strong creative expression.',
-  'Swati': 'Independent and freedom-loving. Diplomatic with a strong need for personal space.',
-  'Vishakha': 'Ambitious and determined. Strong willpower with the ability to achieve goals.',
-  'Anuradha': 'Loyal and devoted. Strong sense of friendship and commitment with spiritual depth.',
-  'Jyeshta': 'Intense and powerful. Strong leadership with protective and authoritative qualities.',
-  'Mula': 'Deep and transformative. Strong connection to roots with the ability to destroy and rebuild.',
-  'Purva Ashadha': 'Ambitious and determined. Strong willpower with the ability to overcome obstacles.',
-  'Uttara Ashadha': 'Noble and victorious. Strong leadership with the ability to achieve great success.',
-  'Shravana': 'Learner and listener. Strong desire for knowledge with excellent communication skills.',
-  'Dhanishta': 'Musical and prosperous. Strong sense of rhythm with the ability to create harmony.',
-  'Shatabhisha': 'Mysterious and healing. Strong intuition with the ability to see beyond the surface.',
-  'Purva Bhadrapada': 'Spiritual and transformative. Strong connection to higher consciousness.',
-  'Uttara Bhadrapada': 'Stable and nurturing. Strong sense of duty with protective and caring nature.',
-  'Revati': 'Compassionate and nurturing. Strong connection to spirituality with healing abilities.',
+// Nakshatra Taglines
+const NAKSHATRA_TAGLINES: Record<string, string> = {
+  'Ashwini': 'The Miracle Worker',
+  'Bharani': 'The Bearer of Light',
+  'Krittika': 'The Razor Sharp',
+  'Rohini': 'The Star of Ascent',
+  'Mrigashira': 'The Seeking Star',
+  'Ardra': 'The Star of Destiny',
+  'Punarvasu': 'The Return of Light',
+  'Pushya': 'The Star of Nourishment',
+  'Ashlesha': 'The Clinging Star',
+  'Magha': 'The Royal Star',
+  'Purva Phalguni': 'The Carefree Star',
+  'Uttara Phalguni': 'The Patron Star',
+  'Hasta': 'The Golden Hand',
+  'Chitra': 'The Bright Star',
+  'Swati': 'The Sword of Independence',
+  'Vishakha': 'The Star of Triumph',
+  'Anuradha': 'The Star of Devotion',
+  'Jyeshta': 'The Chief Star',
+  'Mula': 'The Root Star',
+  'Purva Ashadha': 'The Invincible Star',
+  'Uttara Ashadha': 'The Universal Star',
+  'Shravana': 'The Star of Learning',
+  'Dhanishta': 'The Star of Symphony',
+  'Shatabhisha': 'The Hundred Healers',
+  'Purva Bhadrapada': 'The Spiritual Fire',
+  'Uttara Bhadrapada': 'The Cosmic Depth',
+  'Revati': 'The Nourishing Guardian',
+};
+
+// Western Zodiac Traits
+const WESTERN_TRAITS: Record<string, string[]> = {
+  'Aries': ['Bold', 'Energetic', 'Passionate'],
+  'Taurus': ['Reliable', 'Patient', 'Devoted'],
+  'Gemini': ['Adaptable', 'Expressive', 'Curious'],
+  'Cancer': ['Intuitive', 'Caring', 'Empathetic'],
+  'Leo': ['Generous', 'Creative', 'Confident'],
+  'Virgo': ['Loyal', 'Analytical', 'Kind'],
+  'Libra': ['Diplomatic', 'Gracious', 'Fair'],
+  'Scorpio': ['Brave', 'Passionate', 'Resourceful'],
+  'Sagittarius': ['Generous', 'Idealistic', 'Adventurous'],
+  'Capricorn': ['Disciplined', 'Ambitious', 'Persistent'],
+  'Aquarius': ['Progressive', 'Original', 'Independent'],
+  'Pisces': ['Intuitive', 'Compassionate', 'Artistic'],
+};
+
+// Vedic Zodiac Traits
+const VEDIC_TRAITS: Record<string, string[]> = {
+  'Mesha': ['Bold', 'Energetic', 'Leader'],
+  'Vrishabha': ['Stable', 'Reliable', 'Artistic'],
+  'Mithuna': ['Intellectual', 'Adaptable', 'Expressive'],
+  'Karka': ['Intuitive', 'Nurturing', 'Emotional'],
+  'Simha': ['Charismatic', 'Bold', 'Generous'],
+  'Kanya': ['Practical', 'Analytical', 'Diligent'],
+  'Tula': ['Diplomatic', 'Artistic', 'Balanced'],
+  'Vrishchika': ['Intense', 'Intuitive', 'Resilient'],
+  'Dhanu': ['Optimistic', 'Philosophical', 'Adventurous'],
+  'Makara': ['Disciplined', 'Ambitious', 'Practical'],
+  'Kumbha': ['Innovative', 'Independent', 'Humanitarian'],
+  'Meena': ['Empathetic', 'Intuitive', 'Creative'],
+};
+
+// Nakshatra Traits
+const NAKSHATRA_TRAITS: Record<string, string[]> = {
+  'Ashwini': ['Fast-paced', 'Healing', 'Courageous'],
+  'Bharani': ['Creative', 'Responsible', 'Transformative'],
+  'Krittika': ['Determined', 'Sharp', 'Ambitious'],
+  'Rohini': ['Charming', 'Artistic', 'Nurturing'],
+  'Mrigashira': ['Curious', 'Adaptable', 'Seeker'],
+  'Ardra': ['Intense', 'Resilient', 'Insightful'],
+  'Punarvasu': ['Generous', 'Renewal', 'Optimistic'],
+  'Pushya': ['Nurturing', 'Ethical', 'Dependable'],
+  'Ashlesha': ['Shrewd', 'Intense', 'Perceptive'],
+  'Magha': ['Regal', 'Loyal', 'Ambitious'],
+  'Purva Phalguni': ['Artistic', 'Sociable', 'Joyful'],
+  'Uttara Phalguni': ['Generous', 'Dutiful', 'Loving'],
+  'Hasta': ['Skillful', 'Articulate', 'Creative'],
+  'Chitra': ['Dynamic', 'Attractive', 'Creative'],
+  'Swati': ['Independent', 'Intuitive', 'Fair'],
+  'Vishakha': ['Focused', 'Determined', 'Competitive'],
+  'Anuradha': ['Devoted', 'Resilient', 'Friendly'],
+  'Jyeshta': ['Protective', 'Authoritative', 'Respected'],
+  'Mula': ['Investigative', 'Direct', 'Transformative'],
+  'Purva Ashadha': ['Confident', 'Optimistic', 'Adaptable'],
+  'Uttara Ashadha': ['Noble', 'Patient', 'Virtuous'],
+  'Shravana': ['Attentive', 'Learned', 'Ethical'],
+  'Dhanishta': ['Rhythmic', 'Adaptable', 'Prosperous'],
+  'Shatabhisha': ['Visionary', 'Independent', 'Healing'],
+  'Purva Bhadrapada': ['Spiritual', 'Passionate', 'Unique'],
+  'Uttara Bhadrapada': ['Wise', 'Charitable', 'Stable'],
+  'Revati': ['Gentle', 'Empathetic', 'Spiritual'],
+};
+
+// Western Zodiac Poetic Descriptions
+const WESTERN_DESCRIPTIONS: Record<string, string> = {
+  'Aries': 'You initiate with fire, lead with passion and live fearlessly. Your pioneering spirit lights the path for others.',
+  'Taurus': 'You build on solid ground, appreciate deep beauty and remain patient. Your loyalty is an unshakeable sanctuary.',
+  'Gemini': 'You weave words with magic, seek endless wonder and adapt like the wind. Your mind is a canvas of infinite ideas.',
+  'Cancer': 'You feel with tide-like depth, nurture with tenderness and protect fiercely. Your heart is a safe harbor in any storm.',
+  'Leo': 'You shine like the summer sun, love with open arms and lead with dignity. Your presence warms and inspires everyone.',
+  'Virgo': 'You seek quiet perfection, heal with meticulous care and serve with grace. Your intellect brings order to chaos.',
+  'Libra': 'You seek ultimate harmony, charm with gentle grace and build bridges. Your soul dances in the search for balance.',
+  'Scorpio': 'You walk through shadows, rise from ashes and feel with burning intensity. Your strength lies in your profound rebirth.',
+  'Sagittarius': 'You shoot your arrow at the stars, travel with a free soul and seek truth. Your optimism is a guiding beacon.',
+  'Capricorn': 'You climb the highest peaks, build lasting legacies and stand resilient. Your patience turns dreams into reality.',
+  'Aquarius': 'You dream of a better tomorrow, think outside bounds and stand unique. Your vision is a catalyst for change.',
+  'Pisces': 'You feel deeply, dream wildly and love unconditionally. Your intuition guides you like no other.',
+};
+
+// Vedic Zodiac Poetic Descriptions
+const VEDIC_DESCRIPTIONS: Record<string, string> = {
+  'Mesha': 'You initiate with fire, lead with passion and live fearlessly. Your pioneering spirit lights the path for others.',
+  'Vrishabha': 'You build on solid ground, appreciate deep beauty and remain patient. Your loyalty is an unshakeable sanctuary.',
+  'Mithuna': 'You weave words with magic, seek endless wonder and adapt like the wind. Your mind is a canvas of infinite ideas.',
+  'Karka': 'You feel with tide-like depth, nurture with tenderness and protect fiercely. Your heart is a safe harbor in any storm.',
+  'Simha': 'You shine like the summer sun, love with open arms and lead with dignity. Your presence warms and inspires everyone.',
+  'Kanya': 'You seek quiet perfection, heal with meticulous care and serve with grace. Your intellect brings order to chaos.',
+  'Tula': 'You seek ultimate harmony, charm with gentle grace and build bridges. Your soul dances in the search for balance.',
+  'Vrishchika': 'You walk through shadows, rise from ashes and feel with burning intensity. Your strength lies in your profound rebirth.',
+  'Dhanu': 'You shoot your arrow at the stars, travel with a free soul and seek truth. Your optimism is a guiding beacon.',
+  'Makara': 'You climb the highest peaks, build lasting legacies and stand resilient. Your patience turns dreams into reality.',
+  'Kumbha': 'You dream of a better tomorrow, think outside bounds and stand unique. Your vision is a catalyst for change.',
+  'Meena': 'You feel deeply, dream wildly and love unconditionally. Your intuition guides you like no other.',
+};
+
+// Nakshatra Poetic Descriptions
+const NAKSHATRA_DESCRIPTIONS: Record<string, string> = {
+  'Ashwini': 'You run like the wind, heal with swift touch and bring swift miracles. Your speed and spirit open new horizons.',
+  'Bharani': 'You bear the weight of change, create with passionate intensity and rise transformed. Your journey is one of fire and rebirth.',
+  'Krittika': 'You cut through illusion with laser-like focus, speak truth with courage and shape destiny. Your will is a sacred fire.',
+  'Rohini': 'You attract beauty like a magnetic force, nurture life and flourish. Your presence is a garden of fertility and charm.',
+  'Mrigashira': 'You chase the silver deer, ask the deep questions and search the wild. Your curiosity is a sacred quest.',
+  'Ardra': 'You cry the tears of clearing storms, stand resilient in trials and transform the dark. Your strength is forged in truth.',
+  'Punarvasu': 'You return with the arrow of light, renew what was lost and find hope. Your path is a cycle of eternal return.',
+  'Pushya': 'You flow like warm milk, nurture with infinite grace and stand as a guide. Your soul is a sanctuary of protection.',
+  'Ashlesha': 'You see through the hidden veils, bind with magnetic intensity and rise wise. Your intuition is a deep serpent pool.',
+  'Magha': 'You carry the mantle of ancestors, rule with a generous heart and stand proud. Your honor is a royal crest.',
+  'Purva Phalguni': 'You rest in the shade of joy, love with playful warmth and create art. Your life is a celebration of ease.',
+  'Uttara Phalguni': 'You stand by your solemn word, serve with devoted love and guide families. Your friendship is a lifetime covenant.',
+  'Hasta': 'You mold reality with clever hands, speak with sparkling wit and play. Your dexterity is a craft of pure magic.',
+  'Chitra': 'You design diamonds from dust, shine with dazzling charm and build wonders. Your eye is a lens of absolute beauty.',
+  'Swati': 'You float like a solitary leaf in the breeze, seek absolute freedom and think fair. Your independence is your strength.',
+  'Vishakha': 'You target the golden gate, compete with relentless power and win. Your triumph is written in your patience.',
+  'Anuradha': 'You build bridges across oceans, remain loyal through ages and seek the divine. Your love is a devotion of stars.',
+  'Jyeshta': 'You protect the sacred lineage, rule with silent power and stand mature. Your wisdom is the crown of the elders.',
+  'Mula': 'You pull up the roots of illusion, look into the core truth and rebuild from zero. Your destruction is a clean slate.',
+  'Purva Ashadha': 'You conquer the undefeated, shine with endless hope and flow. Your invincibility is born of self-belief.',
+  'Uttara Ashadha': 'You stand as a pillar of truth, win with universal alliance and remain quiet. Your virtue is unshakeable.',
+  'Shravana': 'You listen to the silent whisper of the cosmos, speak truth and teach. Your mind is a repository of ancient lore.',
+  'Dhanishta': 'You march to the drumbeat of prosperity, harmonize opposing forces and build. Your soul is a symphony of rhythm.',
+  'Shatabhisha': 'You heal with a hundred secret herbs, look into the dark void and know. Your path is a mystery of restoration.',
+  'Purva Bhadrapada': 'You burn with double fire, dream of the deep cosmos and stand apart. Your journey is a bridge of stars.',
+  'Uttara Bhadrapada': 'You sleep in the cosmic ocean, watch the worlds turn and protect. Your peace is a silent mountain.',
+  'Revati': 'You guide the lost traveler home, protect the small and love all. Your compass is a direct link to the divine.',
+};
+
+const getZodiacTagline = (type: 'western' | 'vedic' | 'nakshatra', signName: string | null | undefined): string => {
+  if (!signName) return '';
+  const name = signName.trim();
+  const formatted = formatSignLabel(name);
+  
+  if (type === 'western') {
+    return WESTERN_TAGLINES[name] || WESTERN_TAGLINES[formatted || ''] || '';
+  } else if (type === 'vedic') {
+    return VEDIC_TAGLINES[name] || VEDIC_TAGLINES[formatted || ''] || '';
+  } else if (type === 'nakshatra') {
+    return NAKSHATRA_TAGLINES[name] || NAKSHATRA_TAGLINES[formatted || ''] || '';
+  }
+  return '';
+};
+
+const getZodiacTraits = (type: 'western' | 'vedic' | 'nakshatra', signName: string | null | undefined): string[] => {
+  if (!signName) return [];
+  const name = signName.trim();
+  const formatted = formatSignLabel(name);
+  
+  if (type === 'western') {
+    return WESTERN_TRAITS[name] || WESTERN_TRAITS[formatted || ''] || [];
+  } else if (type === 'vedic') {
+    return VEDIC_TRAITS[name] || VEDIC_TRAITS[formatted || ''] || [];
+  } else if (type === 'nakshatra') {
+    return NAKSHATRA_TRAITS[name] || NAKSHATRA_TRAITS[formatted || ''] || [];
+  }
+  return [];
 };
 
 const getPersonalityDescription = (type: 'western' | 'vedic' | 'nakshatra', signName: string | null | undefined): string | null => {
   if (!signName) return null;
   
-  const normalizedName = signName.trim();
+  const name = signName.trim();
+  const formatted = formatSignLabel(name);
   
   if (type === 'western') {
-    return WESTERN_PERSONALITY_DESCRIPTIONS[normalizedName] || null;
+    return WESTERN_DESCRIPTIONS[name] || WESTERN_DESCRIPTIONS[formatted || ''] || null;
   } else if (type === 'vedic') {
-    // Try both original and formatted name
-    const formatted = formatSignLabel(normalizedName);
-    if (formatted) {
-      return VEDIC_PERSONALITY_DESCRIPTIONS[normalizedName] || VEDIC_PERSONALITY_DESCRIPTIONS[formatted] || null;
-    }
-    return VEDIC_PERSONALITY_DESCRIPTIONS[normalizedName] || null;
+    return VEDIC_DESCRIPTIONS[name] || VEDIC_DESCRIPTIONS[formatted || ''] || null;
   } else if (type === 'nakshatra') {
-    return NAKSHATRA_PERSONALITY_DESCRIPTIONS[normalizedName] || null;
+    return NAKSHATRA_DESCRIPTIONS[name] || NAKSHATRA_DESCRIPTIONS[formatted || ''] || null;
   }
   
   return null;
@@ -179,6 +333,15 @@ const getVedicSymbol = (signName: string | null | undefined): string => {
   if (sign.includes('meena') || sign.includes('pisces')) return '♓';
   
   return '♈';
+};
+
+const getElementGradient = (element?: string | null): readonly [string, string] => {
+  const el = element?.toLowerCase().trim();
+  if (el === 'fire') return ['#FF416C', '#FF4B2B'];
+  if (el === 'earth') return ['#11998e', '#38ef7d'];
+  if (el === 'air') return ['#00c6ff', '#0072ff'];
+  if (el === 'water') return ['#f857a6', '#ff5858'];
+  return ['#A855F7', '#EC4899']; // default purple-pink gradient
 };
 
 const COLORS = {
@@ -337,6 +500,50 @@ export default function ZodiacPreviewScreen() {
       }
     : null;
 
+  const activeSign = useMemo(() => {
+    if (selectedZodiacType === 'vedic') {
+      let el = indianElement;
+      if (!el && indianSignName) {
+        const sign = indianSignName.toLowerCase().trim();
+        if (sign.includes('mesha') || sign.includes('aries') || sign.includes('simha') || sign.includes('leo') || sign.includes('dhanu') || sign.includes('sagittarius')) {
+          el = 'Fire';
+        } else if (sign.includes('vrishabha') || sign.includes('taurus') || sign.includes('kanya') || sign.includes('virgo') || sign.includes('makara') || sign.includes('capricorn')) {
+          el = 'Earth';
+        } else if (sign.includes('mithuna') || sign.includes('gemini') || sign.includes('tula') || sign.includes('libra') || sign.includes('kumbha') || sign.includes('aquarius')) {
+          el = 'Air';
+        } else {
+          el = 'Water';
+        }
+      }
+      return {
+        name: indianSignName ? formatSignLabel(indianSignName) : 'Vedic Sign',
+        symbol: getVedicSymbol(indianSignName),
+        element: el,
+        tagline: getZodiacTagline('vedic', indianSignName),
+        traits: getZodiacTraits('vedic', indianSignName),
+        description: getPersonalityDescription('vedic', indianSignName) || 'Personality description not available',
+      };
+    } else if (selectedZodiacType === 'western') {
+      return {
+        name: westernSign?.name || 'Western Sign',
+        symbol: westernSign?.symbol || '♈',
+        element: westernSign?.element || 'Fire',
+        tagline: getZodiacTagline('western', westernSign?.name),
+        traits: getZodiacTraits('western', westernSign?.name),
+        description: getPersonalityDescription('western', westernSign?.name) || 'Personality description not available',
+      };
+    } else {
+      return {
+        name: nakshatra?.name || 'Nakshatra',
+        symbol: nakshatra?.symbol || '✨',
+        element: 'Celestial',
+        tagline: getZodiacTagline('nakshatra', nakshatra?.name),
+        traits: getZodiacTraits('nakshatra', nakshatra?.name),
+        description: getPersonalityDescription('nakshatra', nakshatra?.name) || 'Personality description not available',
+      };
+    }
+  }, [selectedZodiacType, indianSignName, indianElement, westernSign, nakshatra]);
+
 
   const handleContinue = async () => {
     if (hasSaved) return;
@@ -405,11 +612,21 @@ export default function ZodiacPreviewScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Background Sparkles */}
+      <Ionicons name="sparkles" size={14} color="rgba(168, 85, 247, 0.15)" style={[styles.bgSparkle, { top: 80, left: 30 }]} />
+      <Ionicons name="sparkles" size={16} color="rgba(168, 85, 247, 0.1)" style={[styles.bgSparkle, { top: 120, right: 40 }]} />
+      <Ionicons name="sparkles" size={12} color="rgba(168, 85, 247, 0.15)" style={[styles.bgSparkle, { bottom: 180, left: 45 }]} />
+      <Ionicons name="sparkles" size={15} color="rgba(168, 85, 247, 0.1)" style={[styles.bgSparkle, { bottom: 100, right: 35 }]} />
+
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Your Cosmic Identity</Text>
+            <View style={styles.headerTitleRow}>
+              <Ionicons name="sparkles" size={18} color="#A855F7" style={{ marginRight: 8 }} />
+              <Text style={styles.headerTitle}>Your Cosmic Identity</Text>
+              <Ionicons name="sparkles" size={18} color="#A855F7" style={{ marginLeft: 8 }} />
+            </View>
             <Text style={styles.headerSubtitle}>Discover your signs</Text>
           </View>
 
@@ -433,16 +650,25 @@ export default function ZodiacPreviewScreen() {
                 disabled={!indianSignName}
                 activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    styles.toggleOptionText,
-                    selectedZodiacType === 'vedic' && styles.toggleOptionTextActive,
-                    !indianSignName && styles.toggleOptionTextDisabled,
-                  ]}
-                >
-                  Vedic
-                </Text>
+                <View style={styles.toggleOptionContent}>
+                  <Ionicons
+                    name="sparkles"
+                    size={14}
+                    color={selectedZodiacType === 'vedic' ? '#1A0B2E' : 'rgba(255, 255, 255, 0.5)'}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.toggleOptionText,
+                      selectedZodiacType === 'vedic' && styles.toggleOptionTextActive,
+                      !indianSignName && styles.toggleOptionTextDisabled,
+                    ]}
+                  >
+                    Vedic
+                  </Text>
+                </View>
               </TouchableOpacity>
+              
               <TouchableOpacity
                 style={[
                   styles.toggleOption,
@@ -455,16 +681,25 @@ export default function ZodiacPreviewScreen() {
                 disabled={!westernSign}
                 activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    styles.toggleOptionText,
-                    selectedZodiacType === 'western' && styles.toggleOptionTextActive,
-                    !westernSign && styles.toggleOptionTextDisabled,
-                  ]}
-                >
-                  Western
-                </Text>
+                <View style={styles.toggleOptionContent}>
+                  <Ionicons
+                    name="moon-outline"
+                    size={14}
+                    color={selectedZodiacType === 'western' ? '#1A0B2E' : 'rgba(255, 255, 255, 0.5)'}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.toggleOptionText,
+                      selectedZodiacType === 'western' && styles.toggleOptionTextActive,
+                      !westernSign && styles.toggleOptionTextDisabled,
+                    ]}
+                  >
+                    Western
+                  </Text>
+                </View>
               </TouchableOpacity>
+              
               <TouchableOpacity
                 style={[
                   styles.toggleOption,
@@ -477,20 +712,28 @@ export default function ZodiacPreviewScreen() {
                 disabled={!nakshatra}
                 activeOpacity={0.7}
               >
-                <Text
-                  style={[
-                    styles.toggleOptionText,
-                    selectedZodiacType === 'nakshatra' && styles.toggleOptionTextActive,
-                    !nakshatra && styles.toggleOptionTextDisabled,
-                  ]}
-                >
-                  Nakshatra
-                </Text>
+                <View style={styles.toggleOptionContent}>
+                  <Ionicons
+                    name="sunny-outline"
+                    size={14}
+                    color={selectedZodiacType === 'nakshatra' ? '#1A0B2E' : 'rgba(255, 255, 255, 0.5)'}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text
+                    style={[
+                      styles.toggleOptionText,
+                      selectedZodiacType === 'nakshatra' && styles.toggleOptionTextActive,
+                      !nakshatra && styles.toggleOptionTextDisabled,
+                    ]}
+                  >
+                    Nakshatra
+                  </Text>
+                </View>
               </TouchableOpacity>
             </LinearGradient>
           </View>
 
-          {/* Single Planet Card - Centered */}
+          {/* Single Planet Card - Centered Floating Card */}
           <View style={styles.planetCardContainer}>
             <LinearGradient
               colors={['#1A0B2E', '#2D1B4E', '#4A2C5A']}
@@ -498,7 +741,13 @@ export default function ZodiacPreviewScreen() {
               end={{ x: 0, y: 1 }}
               style={styles.planetCard}
             >
-              {/* Animated Planet Circle with Rotation and Pulse */}
+              {/* Star sparkles inside the card */}
+              <Ionicons name="sparkles" size={14} color="#A855F7" style={styles.starTopLeft} />
+              <Ionicons name="sparkles" size={12} color="rgba(168, 85, 247, 0.6)" style={styles.starTopRight} />
+              <Ionicons name="sparkles" size={10} color="#D946EF" style={styles.starBottomLeft} />
+              <Ionicons name="sparkles" size={13} color="rgba(217, 70, 239, 0.5)" style={styles.starBottomRight} />
+
+              {/* Animated Planet Circle with Rotation, Pulse and Zodiac Backdrop Halo */}
               <Animated.View
                 style={[
                   styles.planetGlowContainer,
@@ -516,20 +765,26 @@ export default function ZodiacPreviewScreen() {
                   },
                 ]}
               >
+                {/* Zodiac Backdrop Halo */}
+                <Image
+                  source={require('../../assets/images/zodiac-superlike.png')}
+                  style={styles.cardZodiacBackdrop}
+                  contentFit="contain"
+                />
+                
+                {/* Glowing Outer Sphere */}
                 <View style={styles.planetSphere}>
-                  {selectedZodiacType === 'vedic' && indianSignName && (
-                    <Text style={styles.planetIcon}>{getVedicSymbol(indianSignName)}</Text>
-                  )}
-                  {selectedZodiacType === 'western' && westernSign && (
-                    <Text style={styles.planetIcon}>{westernSign.symbol}</Text>
-                  )}
-                  {selectedZodiacType === 'nakshatra' && nakshatra && (
-                    <Text style={styles.planetIcon}>{nakshatra.symbol}</Text>
-                  )}
+                  {/* Custom Inner Gradient Badge */}
+                  <LinearGradient
+                    colors={getElementGradient(activeSign.element)}
+                    style={styles.zodiacSymbolBadge}
+                  >
+                    <Text style={styles.zodiacSymbolText}>{activeSign.symbol}</Text>
+                  </LinearGradient>
                 </View>
               </Animated.View>
 
-              {/* Animated Zodiac Name with Slide */}
+              {/* Animated Zodiac Name & Tagline */}
               <Animated.View
                 style={[
                   styles.zodiacNameContainer,
@@ -543,23 +798,22 @@ export default function ZodiacPreviewScreen() {
                   },
                 ]}
               >
-                {selectedZodiacType === 'western' && westernSign && (
-                  <Text style={styles.zodiacName}>{westernSign.name}</Text>
-                )}
-                {selectedZodiacType === 'vedic' && (
-                  indianSignName ? (
-                    <Text style={styles.zodiacName}>{formatSignLabel(indianSignName)}</Text>
-                  ) : (
-                    <Text style={styles.zodiacNamePlaceholder}>Vedic sign not available</Text>
-                  )
-                )}
-                {selectedZodiacType === 'nakshatra' && (
-                  nakshatra ? (
-                    <Text style={styles.zodiacName}>{nakshatra.name}</Text>
-                  ) : (
-                    <Text style={styles.zodiacNamePlaceholder}>Nakshatra not available</Text>
-                  )
-                )}
+                <Text style={styles.zodiacName}>{activeSign.name}</Text>
+                {activeSign.tagline ? (
+                  <Text style={styles.zodiacTagline}>✦ {activeSign.tagline} ✦</Text>
+                ) : null}
+
+                {/* Traits Pill Row */}
+                {activeSign.traits.length > 0 ? (
+                  <View style={styles.traitsContainer}>
+                    {activeSign.traits.map((trait, index) => (
+                      <React.Fragment key={trait}>
+                        {index > 0 && <Text style={styles.traitsSeparator}>•</Text>}
+                        <Text style={styles.traitText}>{trait}</Text>
+                      </React.Fragment>
+                    ))}
+                  </View>
+                ) : null}
               </Animated.View>
 
               {/* Animated Personality Description */}
@@ -571,39 +825,34 @@ export default function ZodiacPreviewScreen() {
                   },
                 ]}
               >
-                {selectedZodiacType === 'western' && westernSign && (
-                  <Text style={styles.personalityDescription}>
-                    {getPersonalityDescription('western', westernSign.name) || 'Personality description not available'}
-                  </Text>
-                )}
-                {selectedZodiacType === 'vedic' && indianSignName && (
-                  <Text style={styles.personalityDescription}>
-                    {getPersonalityDescription('vedic', indianSignName) || 'Personality description not available'}
-                  </Text>
-                )}
-                {selectedZodiacType === 'nakshatra' && nakshatra && (
-                  <Text style={styles.personalityDescription}>
-                    {getPersonalityDescription('nakshatra', nakshatra.name) || 'Personality description not available'}
-                  </Text>
-                )}
+                <Text style={styles.personalityDescription}>
+                  {activeSign.description}
+                </Text>
               </Animated.View>
-
-              {/* Arrow Button - On Planet Card Below Text */}
-              <View style={styles.arrowButtonContainer}>
-                <TouchableOpacity
-                  style={[styles.arrowButton, isSaving && styles.arrowButtonDisabled]}
-                  onPress={handleContinue}
-                  activeOpacity={0.9}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <Text style={styles.arrowButtonText}>›</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
             </LinearGradient>
+          </View>
+
+          {/* Centered Next Button at the Bottom */}
+          <View style={styles.bottomNavContainer}>
+            <TouchableOpacity
+              style={[styles.gradientNextButton, isSaving && styles.gradientNextButtonDisabled]}
+              onPress={handleContinue}
+              activeOpacity={0.8}
+              disabled={isSaving}
+            >
+              <LinearGradient
+                colors={['#8B5CF6', '#EC4899']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.gradientNextButtonFill}
+              >
+                {isSaving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <MaterialCommunityIcons name="chevron-right" size={32} color="#FFFFFF" />
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
 
         </View>
@@ -615,7 +864,11 @@ export default function ZodiacPreviewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAF9FC',
+  },
+  bgSparkle: {
+    position: 'absolute',
+    zIndex: 0,
   },
   safeArea: {
     flex: 1,
@@ -623,172 +876,57 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: -15,
-    paddingBottom: 32,
+    paddingTop: 8,
+    paddingBottom: 16,
     justifyContent: 'space-between',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    letterSpacing: -0.5,
+    marginTop: 8,
     marginBottom: 8,
-    textAlign: 'center',
   },
-  headerSubtitle: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    fontWeight: '400',
-    textAlign: 'center',
-  },
-  planetCardContainer: {
-    marginTop: 24,
-    marginBottom: 24,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  planetCard: {
-    width: SCREEN_WIDTH - 5,
-    height: 700,
-    marginHorizontal: 0,
-    borderTopLeftRadius: 190,
-    borderTopRightRadius: 190,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    overflow: 'hidden',
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: '#A855F7',
-  },
-  starTopLeft: {
-    position: 'absolute',
-    top: 15,
-    left: 15,
-    zIndex: 1,
-  },
-  starTopRight: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-    zIndex: 1,
-  },
-  starBottomLeft: {
-    position: 'absolute',
-    bottom: 15,
-    left: 15,
-    zIndex: 1,
-  },
-  starBottomRight: {
-    position: 'absolute',
-    bottom: 15,
-    right: 15,
-    zIndex: 1,
-  },
-  starIcon: {
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  topArchContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    zIndex: 2,
-  },
-  topArch: {
-    width: '90%',
-    height: 80,
-    borderTopWidth: 2,
-    borderTopColor: '#4FD1C7',
-    borderTopLeftRadius: 150,
-    borderTopRightRadius: 150,
-    marginTop: 10,
-    shadowColor: '#4FD1C7',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-  },
-  titleContainer: {
-    position: 'absolute',
-    top: 100,
-    left: 0,
-    right: 0,
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 3,
-    gap: 10,
   },
-  planetTitle: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#4FD1C7',
-    letterSpacing: 2,
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.5,
+    textAlign: 'center',
   },
-  planetSymbol: {
-    fontSize: 28,
-    color: '#FFFFFF',
-  },
-  planetGlowContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    marginBottom: 30,
-    position: 'relative',
-    height: 220,
-    overflow: 'visible',
-  },
-  planetSphere: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: '#A855F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 5,
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 40,
-    elevation: 15,
-  },
-  planetIcon: {
-    fontSize: 70,
+  headerSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '400',
+    textAlign: 'center',
+    marginTop: 2,
   },
   toggleContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-    paddingHorizontal: 20,
+    marginVertical: 12,
   },
   toggleBackground: {
     flexDirection: 'row',
     borderRadius: 30,
     padding: 4,
     width: '100%',
-    maxWidth: 350,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#24133B',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 3,
   },
   toggleOption: {
     flex: 1,
     paddingVertical: 10,
-    paddingHorizontal: 12,
     borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
@@ -797,18 +935,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   toggleOptionDisabled: {
     opacity: 0.4,
   },
+  toggleOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   toggleOptionText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    color: 'rgba(255, 255, 255, 0.6)',
+    letterSpacing: 0.3,
   },
   toggleOptionTextActive: {
     color: '#1A0B2E',
@@ -817,115 +960,179 @@ const styles = StyleSheet.create({
   toggleOptionTextDisabled: {
     color: 'rgba(255, 255, 255, 0.3)',
   },
+  planetCardContainer: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 8,
+  },
+  planetCard: {
+    width: '100%',
+    height: 490,
+    borderRadius: 32,
+    overflow: 'hidden',
+    position: 'relative',
+    borderWidth: 1.5,
+    borderColor: 'rgba(168, 85, 247, 0.25)',
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  starTopLeft: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    zIndex: 2,
+  },
+  starTopRight: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    zIndex: 2,
+  },
+  starBottomLeft: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    zIndex: 2,
+  },
+  starBottomRight: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    zIndex: 2,
+  },
+  planetGlowContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+    position: 'relative',
+    height: 190,
+  },
+  cardZodiacBackdrop: {
+    position: 'absolute',
+    width: 250,
+    height: 250,
+    opacity: 0.1,
+    tintColor: '#A855F7',
+  },
+  planetSphere: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.25)',
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  zodiacSymbolBadge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  zodiacSymbolText: {
+    fontSize: 44,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   zodiacNameContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
-    paddingBottom: 40,
+    marginTop: 12,
   },
   zodiacName: {
-    fontSize: 32,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  zodiacTagline: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#B088FF',
+    marginTop: 4,
     letterSpacing: 1,
     textAlign: 'center',
   },
-  zodiacNamePlaceholder: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.5)',
-    letterSpacing: 0.5,
-    textAlign: 'center',
+  traitsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(168, 85, 247, 0.25)',
+    borderRadius: 18,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+    marginTop: 12,
+    backgroundColor: 'rgba(168, 85, 247, 0.04)',
+  },
+  traitText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    opacity: 0.95,
+  },
+  traitsSeparator: {
+    fontSize: 12,
+    color: '#B088FF',
+    marginHorizontal: 6,
   },
   personalityDescriptionContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingTop: 8,
-    paddingBottom: 20,
+    paddingHorizontal: 28,
+    marginTop: 14,
   },
   personalityDescription: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '400',
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.75)',
     textAlign: 'center',
-    lineHeight: 20,
-    letterSpacing: 0.3,
+    lineHeight: 21,
+    letterSpacing: 0.2,
   },
-  subtitleContainer: {
-    flexDirection: 'row',
+  bottomNavContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
-    gap: 10,
-  },
-  subtitleDecorLeft: {
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  subtitleDecorRight: {
-    fontSize: 14,
-    color: '#FFFFFF',
-  },
-  subtitleBox: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#4FD1C7',
-    borderRadius: 6,
-    backgroundColor: 'rgba(168, 85, 247, 0.1)',
-  },
-  planetSubtitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-    gap: 8,
-  },
-  paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#D1D5DB',
-  },
-  paginationDotActive: {
-    width: 24,
-    backgroundColor: COLORS.accent,
-  },
-  cardTypeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    marginTop: 8,
     marginBottom: 12,
   },
-  elementBadgeContainer: {
-    flexDirection: 'row',
+  gradientNextButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+    overflow: 'hidden',
+  },
+  gradientNextButtonFill: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
+    justifyContent: 'center',
   },
-  elementEmoji: {
-    fontSize: 16,
-  },
-  elementBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-    letterSpacing: 0.5,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
+  gradientNextButtonDisabled: {
+    opacity: 0.6,
   },
   errorContainer: {
     flex: 1,
@@ -949,35 +1156,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  arrowButtonContainer: {
-    width: '100%',
-    paddingHorizontal: 310,
-    paddingTop: 85,
-    paddingBottom: 24,
-  },
-  arrowButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  arrowButtonDisabled: {
-    opacity: 0.6,
-  },
-  arrowButtonText: {
-  color: COLORS.accent,
-  fontSize: 28,
-  fontWeight: '700',
-  lineHeight: 30,
-  textAlign: 'center',
-  textAlignVertical: 'center',
-  includeFontPadding: false,
-},
 });

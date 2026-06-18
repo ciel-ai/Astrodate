@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, TouchableOpacity as GHTouchableOpacity } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,7 +24,7 @@ import {
   default as ReAnimated,
 } from 'react-native-reanimated';
 import { useAuthAlert } from '@/lib/auth-alert-context';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { uploadUserPhotos } from '../../lib/user-photos';
 
@@ -116,14 +116,14 @@ function DraggablePhotoSlot({
         <Image source={{ uri: photo.uri }} style={styles.photoImage} />
 
         {/* Remove — quick tap, won't trigger 350 ms long-press drag */}
-        <TouchableOpacity
+        <GHTouchableOpacity
           style={styles.removeButton}
           onPress={() => onRemove(photo.id)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           activeOpacity={0.8}
         >
-          <Ionicons name="close-circle" size={28} color="#FFFFFF" />
-        </TouchableOpacity>
+          <Ionicons name="close" size={16} color="#FFFFFF" />
+        </GHTouchableOpacity>
 
         {slotIndex === 0 && (
           <View style={styles.primaryBadge}>
@@ -138,7 +138,7 @@ function DraggablePhotoSlot({
 
         {photo.isVerifying && (
           <View style={styles.verificationOverlay}>
-            <ActivityIndicator size="small" color="#4B0082" />
+            <ActivityIndicator size="small" color="#FFFFFF" />
             <Text style={styles.verificationText}>Verifying...</Text>
           </View>
         )}
@@ -159,6 +159,7 @@ function DraggablePhotoSlot({
 
 export default function PhotoUploadScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [verificationStatus] = useState<{ allVerified: boolean; error?: string }>({ allVerified: false });
@@ -378,7 +379,7 @@ export default function PhotoUploadScreen() {
         disabled={!isEnabled}
       >
         <View style={styles.emptySlotContent}>
-          <Ionicons name="add-circle-outline" size={40} color="#4B0082" />
+          <Ionicons name="add-circle-outline" size={40} color="#A855F7" />
           <Text style={styles.emptySlotText}>
             {index === 0 ? 'Add Primary Photo' : 'Add Photo'}
           </Text>
@@ -424,16 +425,20 @@ export default function PhotoUploadScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Add Your Photos</Text>
+          <View style={styles.titleContainer}>
+            <Ionicons name="sparkles" size={18} color="#C084FC" style={styles.sparkleIcon} />
+            <Text style={styles.title}>Add Your Photos</Text>
+            <Ionicons name="sparkles" size={18} color="#C084FC" style={styles.sparkleIcon} />
+          </View>
           <Text style={styles.subtitle}>
             Show your best self! Add at least {MIN_PHOTOS} photos to continue.
           </Text>
           <View style={styles.constraintContainer}>
-            <Ionicons name="information-circle" size={18} color="#4B0082" />
+            <Ionicons name="information-circle" size={18} color="#C084FC" />
             <Text style={styles.constraintText}>All photos must be of the same person (yourself)</Text>
           </View>
           <View style={styles.progressIndicator}>
@@ -444,7 +449,7 @@ export default function PhotoUploadScreen() {
                   styles.progressBar,
                   {
                     width: `${(photos.length / MAX_PHOTOS) * 100}%`,
-                    backgroundColor: photos.length >= MIN_PHOTOS ? '#10B981' : '#4B0082',
+                    backgroundColor: photos.length >= MIN_PHOTOS ? '#10B981' : '#A855F7',
                   },
                 ]}
               />
@@ -482,8 +487,10 @@ export default function PhotoUploadScreen() {
               <Text style={styles.verificationStatusText}>{verificationStatus.error}</Text>
             </View>
           )}
+        </ScrollView>
 
-          {/* Continue button */}
+        {/* Bottom Button Container */}
+        <View style={[styles.bottomButtonContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <TouchableOpacity
             style={[styles.continueButton, (!canContinue() || isUploading) && styles.continueButtonDisabled]}
             onPress={handleContinue}
@@ -510,14 +517,14 @@ export default function PhotoUploadScreen() {
               </>
             )}
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </Animated.View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#04020b' },
   content:   { flex: 1 },
   header: {
     paddingHorizontal: 28,
@@ -525,16 +532,25 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     alignItems: 'center',
   },
-  title: {
-    color: '#1B1528',
-    fontSize: 36,
-    fontWeight: '800',
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     marginBottom: 12,
+  },
+  sparkleIcon: {
+    marginTop: -4,
+  },
+  title: {
+    color: '#EDE8FF',
+    fontSize: 32,
+    fontWeight: '800',
     textAlign: 'center',
     letterSpacing: 0.5,
   },
   subtitle: {
-    color: '#6B7280',
+    color: '#A89BC2',
     fontSize: 17,
     lineHeight: 26,
     marginBottom: 16,
@@ -545,8 +561,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3ECFF',
-    borderColor: '#E5E7EB',
+    backgroundColor: 'rgba(168,85,247,0.12)',
+    borderColor: 'rgba(168,85,247,0.3)',
     borderWidth: 1.5,
     borderRadius: 12,
     paddingVertical: 10,
@@ -555,7 +571,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   constraintText: {
-    color: '#4B0082',
+    color: '#C084FC',
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
@@ -563,7 +579,7 @@ const styles = StyleSheet.create({
   },
   progressIndicator: { gap: 10, width: '100%' },
   progressText: {
-    color: '#1B1528',
+    color: '#EDE8FF',
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
@@ -571,7 +587,7 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 10,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -590,10 +606,10 @@ const styles = StyleSheet.create({
     height: SLOT_HEIGHT,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#F3ECFF',
+    backgroundColor: 'rgba(168,85,247,0.1)',
     borderWidth: 2.5,
-    borderColor: '#4B0082',
-    shadowColor: 'rgba(75, 0, 130, 0.1)',
+    borderColor: '#A855F7',
+    shadowColor: 'rgba(168,85,247,0.3)',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -601,8 +617,8 @@ const styles = StyleSheet.create({
   },
   photoSlotEmpty: {
     borderStyle: 'dashed',
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+    backgroundColor: 'rgba(168, 85, 247, 0.03)',
     borderWidth: 2,
   },
   photoSlotDragging: {
@@ -622,7 +638,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   emptySlotText: {
-    color: '#6B7280',
+    color: '#A89BC2',
     fontSize: 15,
     fontWeight: '600',
     textAlign: 'center',
@@ -630,57 +646,78 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 8,
+    right: 8,
     zIndex: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(4, 2, 11, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   primaryBadge: {
     position: 'absolute',
-    bottom: 14,
-    left: 14,
-    backgroundColor: '#4B0082',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    shadowColor: '#4B0082',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(168, 85, 247, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    shadowColor: '#A855F7',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 8,
   },
   primaryBadgeText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   dragHandle: {
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 6,
-    padding: 3,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(4, 2, 11, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    zIndex: 8,
   },
   continueButton: {
     borderRadius: 30,
-    backgroundColor: '#4B0082',
-    shadowColor: 'rgba(75, 0, 130, 0.1)',
+    backgroundColor: '#A855F7',
+    shadowColor: '#A855F7',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 6,
-    marginTop: 20,
-    marginBottom: 20,
-    paddingVertical: 20,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
   },
   continueButtonDisabled: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     shadowOpacity: 0,
+  },
+  bottomButtonContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    backgroundColor: '#04020b',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
   },
   continueButtonText: {
     color: '#FFFFFF',
@@ -691,7 +728,7 @@ const styles = StyleSheet.create({
   verificationOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(75, 0, 130, 0.7)',
+    backgroundColor: 'rgba(168,85,247,0.7)',
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
@@ -714,8 +751,8 @@ const styles = StyleSheet.create({
   verificationStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    borderColor: 'rgba(239,68,68,0.3)',
     borderWidth: 1.5,
     borderRadius: 16,
     padding: 14,
@@ -723,7 +760,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   verificationStatusText: {
-    color: '#DC2626',
+    color: '#FF6B6B',
     fontSize: 14,
     fontWeight: '600',
     flex: 1,
