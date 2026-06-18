@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { useAuthAlert } from '@/lib/auth-alert-context';
 import { deactivateCurrentDevicePushToken } from '@/lib/notifications';
+import { deleteSecureItem } from '@/lib/secure-storage';
 
 export default function DeleteAccountScreen() {
   const router = useRouter();
@@ -47,7 +48,8 @@ export default function DeleteAccountScreen() {
               console.error('Delete account error:', error, 'Details:', errMsg);
               throw new Error(errMsg);
             }
-            
+            await deleteSecureItem('userBasicDetails').catch(() => {});
+            await deleteSecureItem('userBirthDetails').catch(() => {});
             await supabase.auth.signOut();
             // Auth listener will handle redirection
           } catch (err: any) {

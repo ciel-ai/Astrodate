@@ -1,8 +1,10 @@
 export { TabScreenFallback as ErrorBoundary } from '@/components/tab-screen-fallback';
 import { getStandouts, type Standout } from '@/lib/daily-picks';
+import { cosmicActedIds } from '@/lib/cosmic-acted-ids';
 import { getMembershipOrFree } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -234,12 +236,7 @@ function ListHeader({
       </View>
 
       {/* Element filter pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filtersScrollContent}
-        style={styles.filtersScroll}
-      >
+      <View style={styles.filtersContainer}>
         {FILTERS.map((f) => {
           const isActive = activeFilter === f;
           const elColors = f !== 'All' ? ELEMENT_COLORS[f] : null;
@@ -269,7 +266,7 @@ function ListHeader({
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* Section label */}
       <View style={styles.sectionLabelRow}>
@@ -375,6 +372,13 @@ export default function CosmicScreen() {
 
   useEffect(() => { fetchProfiles(); }, []);
 
+  useFocusEffect(useCallback(() => {
+    if (cosmicActedIds.size > 0) {
+      setProfiles(prev => prev.filter(p => !cosmicActedIds.has(p.id)));
+      cosmicActedIds.clear();
+    }
+  }, []));
+
   // ── Filtered list ──────────────────────────────────────────────────────────
 
   const filtered = activeFilter === 'All'
@@ -387,7 +391,7 @@ export default function CosmicScreen() {
     <CosmicCard
       profile={item}
       index={index}
-      onPress={() => router.push({ pathname: '/profile-details', params: { userId: item.id } })}
+      onPress={() => router.push({ pathname: '/profile-details', params: { userId: item.id, source: 'cosmic' } })}
     />
   );
 
@@ -427,7 +431,7 @@ export default function CosmicScreen() {
           {!isSubscribed && (
             <TouchableOpacity
               style={styles.upgradeChip}
-              onPress={() => router.push('/(tabs)/profile')}
+              onPress={() => router.push('/subscription')}
               activeOpacity={0.8}
             >
               <MaterialIcons name="auto-awesome" size={12} color="#fbbf24" />
@@ -561,17 +565,17 @@ const styles = StyleSheet.create({
   },
 
   // Filters
-  filtersScroll: { flexGrow: 0 },
-  filtersScrollContent: {
-    paddingHorizontal: 18,
-    gap: 8,
+  // Filters
+  filtersContainer: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.07)',

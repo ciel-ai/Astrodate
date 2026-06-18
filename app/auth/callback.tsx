@@ -6,6 +6,7 @@ import { useAuthAlert } from '@/lib/auth-alert-context';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setSecureItem } from '@/lib/secure-storage';
 
 // Signal any waiting openAuthSessionAsync to complete with the redirect URL
 WebBrowser.maybeCompleteAuthSession();
@@ -124,7 +125,7 @@ export default function AuthCallbackScreen() {
         console.log('✅ [auth/callback] Link successful. Saving email to AsyncStorage:', linkedEmail);
         const storageEmail = linkedEmail || userData?.user?.email || '';
         if (storageEmail) {
-          await AsyncStorage.setItem('oauth_linked_email', storageEmail);
+          await setSecureItem('oauth_linked_email', storageEmail);
         }
 
         // Clean up flow action
@@ -321,7 +322,7 @@ export default function AuthCallbackScreen() {
       // Dismiss the browser tab immediately on screen mount
       try {
         WebBrowser.dismissBrowser();
-      } catch (e) {}
+      } catch (e) { console.warn('[WebBrowser] dismissBrowser failed:', e); }
 
       // Prioritize the custom passed URL parameter (if populated)
       const passedUrl = urlVal ? decodeURIComponent(urlVal) : null;

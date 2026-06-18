@@ -11,6 +11,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRouter } from 'expo-router';
 import { SUPABASE_URL } from '@/lib/supabase';
+import { deleteSecureItem } from '@/lib/secure-storage';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
@@ -335,6 +336,10 @@ export default function SettingsScreen() {
               const { GoogleSignin } = require('@react-native-google-signin/google-signin');
               await GoogleSignin.signOut();
             } catch (e) {}
+
+            // Delete secure details items
+            await deleteSecureItem('userBasicDetails').catch(() => {});
+            await deleteSecureItem('userBirthDetails').catch(() => {});
 
             // Manually purge all Supabase auth keys from AsyncStorage immediately
             try {

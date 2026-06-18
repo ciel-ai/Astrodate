@@ -37,7 +37,7 @@ export const profileStyles = StyleSheet.create({
     textAlign: 'center',
   },
   headerButton: {
-    width: 84, // Changed to match the total width of headerRight (36 + 12 + 36 = 84) to exactly center the title
+    width: 36, // Changed to match the total width of headerRight (36 + 12 + 36 = 84) to exactly center the title
     height: 36,
     borderRadius: 18,
     backgroundColor: 'transparent',

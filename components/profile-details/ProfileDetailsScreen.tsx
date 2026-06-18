@@ -1,4 +1,5 @@
 import { checkMutualLike, saveUserLike, withdrawUserLike } from '@/lib/user-likes';
+import { cosmicActedIds } from '@/lib/cosmic-acted-ids';
 import { getUserPhotos } from '@/lib/user-photos';
 import { getZodiacCompatibility } from '@/lib/astro';
 import { supabase } from '@/lib/supabase';
@@ -24,9 +25,11 @@ import AstrologyInsights from '@/components/profile-details/AstrologyInsights';
 import FloatingActionButtons from '@/components/profile-details/FloatingActionButtons';
 import SynastryBreakdown from '@/components/profile-details/SynastryBreakdown';
 import { getCompatibilitySubScores, getAstrologyInsights } from '@/lib/profile-mappers';
+import { createReport } from '@/lib/reports';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Modal,
   Pressable,
@@ -89,10 +92,17 @@ export default function ProfileDetailsScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [westernReport, setWesternReport] = useState<string | undefined>(undefined);
   const [zodiacScore, setZodiacScore] = useState<number | undefined>(undefined);
+  const [superLikesRemaining, setSuperLikesRemaining] = useState<number | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (isMountedRef.current) setCurrentUserId(data?.user?.id ?? null);
+      const uid = data?.user?.id ?? null;
+      if (isMountedRef.current) setCurrentUserId(uid);
+      if (uid) {
+        supabase.rpc('get_super_likes_remaining', { p_user_id: uid }).then(({ data: count, error }) => {
+          if (!error && count !== null && isMountedRef.current) setSuperLikesRemaining(count as number);
+        });
+      }
     });
   }, []);
 
@@ -286,6 +296,7 @@ export default function ProfileDetailsScreen() {
     try {
       const result = await saveUserLike(String(profile.id), 'like');
       if (result.success) {
+        if (params.source === 'cosmic') cosmicActedIds.add(String(profile.id));
         const matchFound = await checkAndShowMatch(String(profile.id));
         if (!matchFound) {
           setTimeout(() => router.back(), 300);
@@ -304,6 +315,7 @@ export default function ProfileDetailsScreen() {
     try {
       const result = await saveUserLike(String(profile.id), 'dislike');
       if (result.success || result.error === 'THE_USER_NO_LONGER_EXISTS') {
+        if (params.source === 'cosmic') cosmicActedIds.add(String(profile.id));
         setTimeout(() => router.back(), 300);
       }
     } catch (err) {
@@ -324,6 +336,8 @@ export default function ProfileDetailsScreen() {
     try {
       const result = await saveUserLike(String(profile.id), 'super_like');
       if (result.success) {
+        if (params.source === 'cosmic') cosmicActedIds.add(String(profile.id));
+        setSuperLikesRemaining(prev => (prev !== null ? Math.max(0, prev - 1) : null));
         await checkAndShowMatch(String(profile.id));
         if (!showMatchModal) {
           setTimeout(() => router.back(), 400);
@@ -334,6 +348,31 @@ export default function ProfileDetailsScreen() {
     } catch (err) {
       console.error('Error in handleSuperLike:', err);
     }
+  };
+
+  const handleReportUser = () => {
+    if (!profile) return;
+    Alert.alert('Report Profile', 'Report this profile for inappropriate content?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Report',
+        style: 'destructive',
+        onPress: async () => {
+          const result = await createReport(
+            String(profile.id),
+            'Something on their profile',
+            'Inappropriate profile content',
+            ''
+          );
+          Alert.alert(
+            result.success ? 'Reported' : 'Error',
+            result.success
+              ? 'Thank you. Our team will review this profile.'
+              : 'Failed to submit report. Please try again.'
+          );
+        },
+      },
+    ]);
   };
 
   // ─── Withdraw sent like ──────────────────────────────────────────────────────
@@ -470,6 +509,14 @@ export default function ProfileDetailsScreen() {
                 compatibility={getCompatibilitySubScores(profile).overall}
               />
               
+              <View style={[styles.topRightFloatingButtonContainer, { top: params.source === 'sent' ? 110 : 50 }]}>
+                <TouchableOpacity onPress={handleReportUser} style={[styles.withdrawButton, { backgroundColor: 'rgba(11, 4, 21, 0.6)' }]} accessibilityLabel="Report profile" accessibilityRole="button">
+                  <View style={styles.withdrawInner}>
+                    <Ionicons name="warning-outline" size={24} color="#EF4444" />
+                  </View>
+                </TouchableOpacity>
+              </View>
+              
               {/* Withdraw Button positioned at top right over the hero image */}
               {params.source === 'sent' && (
                 <View style={styles.topRightFloatingButtonContainer}>
@@ -544,6 +591,7 @@ export default function ProfileDetailsScreen() {
               onPass={handleDislike}
               onSuperLike={handleSuperLike}
               onLike={handleLike}
+              superLikeCount={superLikesRemaining}
             />
           )}
 
@@ -551,8 +599,9 @@ export default function ProfileDetailsScreen() {
           {params.source === 'likes' && (
             <FloatingActionButtons
               onPass={handleDislike}
-              onSuperLike={handleSuperLike} // Maybe hide superlike? Re-using for now.
+              onSuperLike={handleSuperLike}
               onLike={handleLike}
+              superLikeCount={superLikesRemaining}
             />
           )}
         </View>

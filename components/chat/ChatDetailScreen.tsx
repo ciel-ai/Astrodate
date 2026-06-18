@@ -183,6 +183,17 @@ export default function ChatDetailScreen() {
     } catch {}
   }, [router]);
 
+  const handleBlock = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const { blockUser } = await import('@/lib/blocks');
+      await blockUser(chatId);
+      router.replace('/(tabs)/chats');
+    } catch {
+      showAlert('Error', 'Failed to block user. Please try again.');
+    }
+  }, [chatId, router, showAlert]);
+
   const handleRetryMessage = useCallback(async (failedMessage: any) => {
     if (!failedMessage?.text || failedMessage.text === failedMessage.id) return;
     removeMessage(failedMessage.id);
@@ -333,6 +344,7 @@ export default function ChatDetailScreen() {
         userName={user?.name ?? ''}
         onUnmatch={handleUnmatchAndDelete}
         onReport={handleReport}
+        onBlock={handleBlock}
       />
     </ErrorBoundary>
   );

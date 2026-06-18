@@ -273,12 +273,23 @@ async function handleRenewal(
   };
   if (planId) updatePayload.plan_id = planId;
 
+  const { data: rowToUpdate } = await supabase
+    .from("user_subscriptions")
+    .select("id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!rowToUpdate) {
+    console.error("handleRenewal: no subscription row found for user", userId);
+    return;
+  }
+
   const { error } = await supabase
     .from("user_subscriptions")
     .update(updatePayload)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .eq("id", rowToUpdate.id);
 
   if (error) console.error("handleRenewal UPDATE error:", error);
 
@@ -292,15 +303,26 @@ async function handleStatusChange(
   userId: string,
   status: "canceled" | "expired" | "past_due",
 ): Promise<void> {
+  const { data: rowToUpdate } = await supabase
+    .from("user_subscriptions")
+    .select("id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!rowToUpdate) {
+    console.error(`handleStatusChange(${status}): no subscription row found for user`, userId);
+    return;
+  }
+
   const { error } = await supabase
     .from("user_subscriptions")
     .update({
       status,
       updated_at: new Date().toISOString(),
     })
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .eq("id", rowToUpdate.id);
 
   if (error) console.error(`handleStatusChange(${status}) UPDATE error:`, error);
 

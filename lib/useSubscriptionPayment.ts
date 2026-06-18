@@ -147,8 +147,9 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
       activePaymentLinkIdRef.current = paymentLinkId;
       if (isMountedRef.current) setPaymentStatus('pending');
 
+      const uniqueChannelName = `subscription-verify-${userId}-${Date.now()}`;
       const channel = supabase
-        .channel(`subscription-verify-${userId}`)
+        .channel(uniqueChannelName)
         .on(
           'postgres_changes',
           {

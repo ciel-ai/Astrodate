@@ -1,7 +1,7 @@
 import { useAuthAlert } from '@/lib/auth-alert-context';
 import { saveUserProfile } from '@/lib/user-profile';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { setSecureItem } from '@/lib/secure-storage';
+import { getSecureItem, setSecureItem, deleteSecureItem } from '@/lib/secure-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,7 @@ import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -184,13 +185,13 @@ export default function BasicDetailsScreen() {
   useEffect(() => {
     const checkLinkedEmail = async () => {
       try {
-        const storedEmail = await AsyncStorage.getItem('oauth_linked_email');
+        const storedEmail = await getSecureItem('oauth_linked_email');
         if (storedEmail) {
           console.log('📬 [basic-details] Found linked email in storage:', storedEmail);
           setEmail(storedEmail);
           setErrors((prev) => ({ ...prev, email: '' }));
           setStepIndex(2); // Move to gender step after email verification
-          await AsyncStorage.removeItem('oauth_linked_email');
+          await deleteSecureItem('oauth_linked_email');
         }
       } catch (err) {
         console.warn('Error checking linked email:', err);

@@ -3,21 +3,31 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import React from 'react';
-import { Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const { height: STATIC_HEIGHT } = Dimensions.get('window');
+const BTN = STATIC_HEIGHT < 750 ? 60 : 66;
+const BTN_LG = STATIC_HEIGHT < 750 ? 72 : 78;
 
 interface FloatingActionButtonsProps {
   onPass: () => void;
   onSuperLike: () => void;
   onLike: () => void;
+  superLikeCount?: number | null;
 }
 
 export default function FloatingActionButtons({
   onPass,
   onSuperLike,
   onLike,
+  superLikeCount,
 }: FloatingActionButtonsProps) {
+  const showBadge =
+    superLikeCount !== null &&
+    superLikeCount !== undefined &&
+    superLikeCount <= 2 &&
+    superLikeCount < 999;
+
   return (
     <View style={styles.container}>
       {/* Dislike / Pass */}
@@ -50,6 +60,11 @@ export default function FloatingActionButtons({
             contentFit="contain"
           />
         </View>
+        {showBadge && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{superLikeCount}</Text>
+          </View>
+        )}
       </TouchableOpacity>
 
       {/* Like */}
@@ -68,9 +83,6 @@ export default function FloatingActionButtons({
     </View>
   );
 }
-
-const BTN = STATIC_HEIGHT < 750 ? 60 : 66;
-const BTN_LG = STATIC_HEIGHT < 750 ? 72 : 78;
 
 const styles = StyleSheet.create({
   container: {
@@ -116,5 +128,24 @@ const styles = StyleSheet.create({
   superLikeImage: {
     width: BTN_LG - 6,
     height: BTN_LG - 6,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#F59E0B',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#1D0F38',
+  },
+  badgeText: {
+    color: '#1D0F38',
+    fontSize: 9.5,
+    fontWeight: '800',
   },
 });
