@@ -19,6 +19,18 @@ export default function SplashScreen() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  useEffect(() => {
+    try {
+      console.log('[GoogleSignin] Configuring with webClientId:', process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      });
+    } catch (err) {
+      console.warn('[GoogleSignin] Native module not available (running in Expo Go?):', err);
+    }
+  }, []);
+
   const handleCheckboxPress = () => {
     // Just toggle the checkbox state
     setAgreedToTerms(!agreedToTerms);
@@ -113,6 +125,44 @@ export default function SplashScreen() {
         }
       }
 
+      if (provider === 'google') {
+        let GoogleSignin;
+        try {
+          GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
+        } catch (err) {
+          Alert.alert(
+            'Not Supported in Expo Go',
+            'Native Google Sign-In is only available in a custom development build. Please use Phone Login or run a development build (npx expo run:android / ios) to test Google login.'
+          );
+          setIsLoggingIn(false);
+          return;
+        }
+
+        await GoogleSignin.hasPlayServices();
+        try {
+          await GoogleSignin.signOut();
+        } catch (e) {}
+        const userInfo = await GoogleSignin.signIn();
+        const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
+
+        if (idToken) {
+          const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: idToken,
+          });
+
+          if (error) throw error;
+          await checkUserAndNavigate(
+            sessionData.session?.user?.id,
+            sessionData.session?.user?.email
+          );
+          return;
+        } else {
+          throw new Error('No identity token returned from Google.');
+        }
+      }
+
+      // Fallback to web OAuth for other cases (e.g. Apple on Android)
       await AsyncStorage.setItem('oauth_flow_action', 'login');
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('[auth] Starting OAuth with redirect:', redirectUrl);

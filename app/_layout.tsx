@@ -258,7 +258,8 @@ function RootLayout() {
         hasNavigatedRef.current = false;
         markReady();
         hideSplashSafely();
-        safeReplace('/onboarding/login');
+        // Use welcome screen so users can pick their sign-in method (Apple, phone, email)
+        safeReplace('/onboarding/welcome');
       }
     });
 

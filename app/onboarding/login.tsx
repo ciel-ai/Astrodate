@@ -30,7 +30,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
+  } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 
@@ -51,6 +51,18 @@ export default function LoginScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
+
+  useEffect(() => {
+    try {
+      console.log('[GoogleSignin Login] Configuring with webClientId:', process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      });
+    } catch (err) {
+      console.warn('[GoogleSignin] Native module not available (running in Expo Go?):', err);
+    }
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -174,28 +186,20 @@ export default function LoginScreen() {
     }
 
     // Check 3 — no profile anywhere
-    if (email) {
-      // New user — no account exists yet → send to onboarding
-      await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
-      router.replace({
-        pathname: '/onboarding/basic-details',
-        params: {
-          ...(appleFullName ? { prefillName: appleFullName } : {}),
-          prefillEmail: email,
-        },
-      });
-    } else {
-      // No email and no profile → cannot identify user
-      await supabase.auth.signOut();
-      showAlert(
-        'Account Not Found',
-        'Could not find an AstroDate account for this sign-in. Please sign up with your phone number first.',
-        [
-          { text: 'Sign Up', onPress: () => router.replace('/onboarding/signup') },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
-    }
+    await supabase.auth.signOut();
+    try {
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      await GoogleSignin.signOut();
+    } catch (e) {}
+
+    showAlert(
+      'Account Not Found',
+      'Could not find an AstroDate account for this sign-in. Please sign up first.',
+      [
+        { text: 'Sign Up', onPress: () => router.replace('/onboarding/signup') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
@@ -240,6 +244,48 @@ export default function LoginScreen() {
         }
       }
 
+      if (provider === 'google') {
+        let GoogleSignin;
+        try {
+          GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
+        } catch (err) {
+          const { Alert } = require('react-native');
+          Alert.alert(
+            'Not Supported in Expo Go',
+            'Native Google Sign-In is only available in a custom development build. Please use Phone Login or run a development build (npx expo run:android / ios) to test Google login.'
+          );
+          setIsLoggingIn(false);
+          return;
+        }
+
+        await GoogleSignin.hasPlayServices();
+        try {
+          await GoogleSignin.signOut();
+        } catch (e) {}
+        const userInfo = await GoogleSignin.signIn();
+        const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
+        const user = userInfo.data?.user || (userInfo as any).user;
+        const googleFullName = user?.name || undefined;
+
+        if (idToken) {
+          const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: idToken,
+          });
+
+          if (error) throw error;
+          await checkUserAndNavigate(
+            sessionData.session?.user?.id,
+            sessionData.session?.user?.email,
+            googleFullName,
+          );
+          return;
+        } else {
+          throw new Error('No identity token returned from Google.');
+        }
+      }
+
+      // Fallback to web OAuth for other cases (e.g. Apple on Android)
       await AsyncStorage.setItem('oauth_flow_action', 'login');
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);

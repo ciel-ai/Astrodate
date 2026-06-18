@@ -33,21 +33,28 @@ export interface UseSubscriptionPaymentReturn {
 const POLL_INTERVALS_MS = [3_000, 6_000, 12_000, 20_000, 30_000];
 
 let _rcConfigured = false;
+let _rcActive = false; // true only when Purchases.configure() was actually called
 
 export async function ensureRevenueCatConfigured() {
   if (_rcConfigured) return; // prevent duplicate init
-  
+
   if (Platform.OS !== 'ios') {
     _rcConfigured = true;
     return;
   }
 
-  if (!REVENUECAT_API_KEY_IOS) {
-    throw new Error('RevenueCat iOS API key is missing.');
+  if (!REVENUECAT_API_KEY_IOS || REVENUECAT_API_KEY_IOS === 'PASTE_YOUR_REVENUECAT_IOS_KEY_HERE') {
+    // Non-fatal in Expo Go / dev builds — IAP won't work but the app still loads.
+    // Set EXPO_PUBLIC_REVENUECAT_API_KEY_IOS in .env or EAS Secrets for real purchases.
+    console.warn('[RevenueCat] iOS API key is missing — in-app purchases disabled.');
+    _rcConfigured = true;
+    _rcActive = false; // SDK not initialized — guard all Purchases calls
+    return;
   }
 
   Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS });
   _rcConfigured = true;
+  _rcActive = true;
 }
 
 function getRevenueCatPlanSlug(options: StartPaymentOptions): RevenueCatPlanSlug | null {
@@ -242,6 +249,13 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
 
           await ensureRevenueCatConfigured();
 
+          if (!_rcActive) {
+            throw new Error(
+              'In-app purchases are not available in this build. ' +
+              'Please install from TestFlight or the App Store to subscribe.'
+            );
+          }
+
           // Bind the RevenueCat anonymous ID to our Supabase UID so the
           // webhook's app_user_id matches auth.users.id in our DB.
           if (options.userId) {
@@ -348,6 +362,10 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
   const restorePurchases = useCallback(async () => {
     if (Platform.OS === 'ios') {
       await ensureRevenueCatConfigured();
+      if (!_rcActive) {
+        console.warn('[RC] restorePurchases skipped — SDK not initialized (missing API key).');
+        return false;
+      }
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         try { await Purchases.logIn(user.id); } catch { /* non-fatal */ }

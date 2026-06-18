@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -435,21 +436,23 @@ export default function BasicDetailsScreen() {
       if (isMountedRef.current) setIsSaving(false);
     }
   };
-
   const handleBack = async () => {
     if (stepIndex === 0) {
-      await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
-      if (router.canGoBack()) {
-        router.back();
-      } else {
+      try {
+        await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
         await supabase.auth.signOut();
-        router.replace('/onboarding/welcome');
+        try {
+          const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+          await GoogleSignin.signOut();
+        } catch (e) {}
+      } catch (err) {
+        console.warn('Sign out error on back:', err);
       }
+      router.replace('/onboarding/welcome');
       return;
     }
     setStepIndex((prev) => Math.max(prev - 1, 0));
   };
-
   const [locationLoading, setLocationLoading] = useState(false);
 
   const handleGetLocation = async () => {

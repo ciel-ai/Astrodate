@@ -51,7 +51,7 @@
     },
     "android": {
       "versionCode": 2,
-      "package": "com.astrodate.app",
+      "package": "com.ciel.astrod8",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -158,7 +158,8 @@
         }
       ],
       "expo-apple-authentication",
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,

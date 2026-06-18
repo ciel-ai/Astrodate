@@ -327,12 +327,37 @@ export default function SettingsScreen() {
           if (isLoggingOutRef.current) return;  // guard
           isLoggingOutRef.current = true;
           try {
-            await deactivateCurrentDevicePushToken();
-            await supabase.auth.signOut();
-            // navigation handled by SIGNED_OUT listener
-          } catch {
+            // Deactivate push token in the background so network failure doesn't block logout
+            deactivateCurrentDevicePushToken().catch(console.warn);
+            
+            // Sign out from native Google client
+            try {
+              const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+              await GoogleSignin.signOut();
+            } catch (e) {}
+
+            // Manually purge all Supabase auth keys from AsyncStorage immediately
+            try {
+              const allKeys = await AsyncStorage.getAllKeys();
+              const authKeys = allKeys.filter((k) => k.includes('-auth-token') || k.includes('supabase'));
+              if (authKeys.length > 0) await AsyncStorage.multiRemove(authKeys);
+            } catch (storageErr) {
+              console.warn('[Logout] AsyncStorage purge warning:', storageErr);
+            }
+
+            // Sign out from Supabase (standard network signout)
+            // Catch any network errors so the logout flow still succeeds locally
+            await supabase.auth.signOut().catch((signOutErr) => {
+              console.warn('[Logout] Supabase network signOut warning:', signOutErr);
+            });
+
+            // Force route replacement to welcome screen in case layout event didn't trigger
+            router.replace('/onboarding/welcome');
+          } catch (err) {
             isLoggingOutRef.current = false;
             showAlert('Logout Failed', 'Please try again.');
+          } finally {
+            isLoggingOutRef.current = false;
           }
         },
       },

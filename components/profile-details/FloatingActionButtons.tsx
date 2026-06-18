@@ -1,7 +1,11 @@
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Dimensions, StyleSheet, TouchableOpacity, View } from 'react-native';
+
+const { height: STATIC_HEIGHT } = Dimensions.get('window');
 
 interface FloatingActionButtonsProps {
   onPass: () => void;
@@ -16,35 +20,57 @@ export default function FloatingActionButtons({
 }: FloatingActionButtonsProps) {
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={onPass} activeOpacity={0.8}>
-        <LinearGradient
-          colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-          style={[styles.button, styles.smallButton]}
-        >
-          <Ionicons name="close" size={28} color="#FFFFFF" />
-        </LinearGradient>
+      {/* Dislike / Pass */}
+      <TouchableOpacity
+        onPress={onPass}
+        activeOpacity={0.7}
+        style={styles.buttonWrapper}
+        accessibilityLabel="Pass"
+        accessibilityRole="button"
+      >
+        <View style={[styles.button, styles.smallButton]}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+          <FontAwesome name="close" size={28} color="#FFFFFF" />
+        </View>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={onSuperLike} activeOpacity={0.8}>
-        <LinearGradient
-          colors={['#A855F7', '#7E22CE']}
-          style={[styles.button, styles.largeButton]}
-        >
-          <Ionicons name="star" size={32} color="#FFFFFF" />
-        </LinearGradient>
+      {/* Super Like */}
+      <TouchableOpacity
+        onPress={onSuperLike}
+        activeOpacity={0.7}
+        style={styles.buttonWrapper}
+        accessibilityLabel="Super Like"
+        accessibilityRole="button"
+      >
+        <View style={[styles.button, styles.largeButton]}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+          <Image
+            source={require('../../assets/images/zodiac-superlike.png')}
+            style={styles.superLikeImage}
+            contentFit="contain"
+          />
+        </View>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={onLike} activeOpacity={0.8}>
-        <LinearGradient
-          colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)']}
-          style={[styles.button, styles.smallButton]}
-        >
-          <Ionicons name="heart" size={28} color="#34D399" />
-        </LinearGradient>
+      {/* Like */}
+      <TouchableOpacity
+        onPress={onLike}
+        activeOpacity={0.7}
+        style={styles.buttonWrapper}
+        accessibilityLabel="Like"
+        accessibilityRole="button"
+      >
+        <View style={[styles.button, styles.smallButton]}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+          <MaterialIcons name="favorite" size={28} color="#EC4899" />
+        </View>
       </TouchableOpacity>
     </View>
   );
 }
+
+const BTN = STATIC_HEIGHT < 750 ? 60 : 66;
+const BTN_LG = STATIC_HEIGHT < 750 ? 72 : 78;
 
 const styles = StyleSheet.create({
   container: {
@@ -55,30 +81,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 20,
+    gap: STATIC_HEIGHT < 750 ? 20 : 28,
     zIndex: 100,
   },
-  button: {
-    alignItems: 'center',
+  buttonWrapper: {
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  button: {
     borderRadius: 999,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(26, 11, 46, 0.85)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   smallButton: {
-    width: 60,
-    height: 60,
+    width: BTN,
+    height: BTN,
   },
   largeButton: {
-    width: 72,
-    height: 72,
+    width: BTN_LG,
+    height: BTN_LG,
     shadowColor: '#A855F7',
     shadowOpacity: 0.5,
-    borderColor: 'rgba(168, 85, 247, 0.5)',
+    borderColor: 'rgba(168, 85, 247, 0.4)',
+  },
+  superLikeImage: {
+    width: BTN_LG - 6,
+    height: BTN_LG - 6,
   },
 });

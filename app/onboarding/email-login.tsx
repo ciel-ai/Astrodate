@@ -62,6 +62,17 @@ export default function EmailLoginScreen() {
   const cardSlideAnim = useRef(new Animated.Value(80)).current;
 
   useEffect(() => {
+    try {
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      });
+    } catch (err) {
+      console.warn('[GoogleSignin] Native module not available (running in Expo Go?):', err);
+    }
+  }, []);
+
+  useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 50, useNativeDriver: true }),
@@ -151,97 +162,47 @@ export default function EmailLoginScreen() {
   const handleGoogleLogin = async () => {
     try {
       if (isMountedRef.current) setLoading(true);
-      const finalRedirectUri = Linking.createURL('auth/callback');
-      console.log('🔗 [email-login] Google OAuth redirect URI:', finalRedirectUri);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: finalRedirectUri },
-      });
-
-      if (error || !data?.url) {
-        showAlert('Google Login Failed', error?.message ?? 'Could not start Google login.');
+      let GoogleSignin;
+      try {
+        GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
+      } catch (err) {
+        const { Alert } = require('react-native');
+        Alert.alert(
+          'Not Supported in Expo Go',
+          'Native Google Sign-In is only available in a custom development build. Please use Phone Login or run a development build (npx expo run:android / ios) to test Google login.'
+        );
         if (isMountedRef.current) setLoading(false);
         return;
       }
 
-      const processLoginResult = async (url: string) => {
-        try {
-          const hashStr = url.split('#')[1] || '';
-          const pairs = hashStr.split('&');
-          let accessToken: string | null = null;
-          let refreshToken: string | null = null;
-          for (const pair of pairs) {
-            const [k, v] = pair.split('=');
-            if (k === 'access_token' && v) accessToken = decodeURIComponent(v);
-            if (k === 'refresh_token' && v) refreshToken = decodeURIComponent(v);
-          }
-          if (accessToken && refreshToken) {
-            const { data: sd, error: se } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-            if (!se && sd?.session?.user) {
-              await handleOAuthSuccess(sd.session.user);
-              return;
-            }
-          }
-        } catch { }
+      await GoogleSignin.hasPlayServices();
+      try {
+        await GoogleSignin.signOut();
+      } catch (e) {}
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
 
-        // Fallback: poll for session
-        let retries = 0;
-        const checkSession = async () => {
-          if (!isMountedRef.current) return;
-          const { data: sd } = await supabase.auth.getSession();
-          if (sd?.session?.user) {
-            await handleOAuthSuccess(sd.session.user);
-          } else if (retries < 10) {
-            retries++;
-            oauthRetryRef.current = setTimeout(checkSession, 500);
-          } else {
-            if (isMountedRef.current) setLoading(false);
-            showAlert('Authentication Error', 'Could not establish session. Please try again.');
-          }
-        };
-        oauthRetryRef.current = setTimeout(checkSession, 500);
-      };
-
-      if (Platform.OS === 'android') {
-        const linkingPromise = new Promise<string>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            sub.remove();
-            reject(new Error('Google sign-in timed out. Please try again.'));
-          }, 120_000);
-
-          const sub = Linking.addEventListener('url', ({ url }) => {
-            console.log(`[auth] Android deep link received:`, url);
-            if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
-              clearTimeout(timeout);
-              sub.remove();
-              resolve(url);
-            }
-          });
+      if (idToken) {
+        const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
         });
 
-        console.log(`[auth] Opening Google auth in default browser...`);
-        await Linking.openURL(data.url);
-        const authUrl = await linkingPromise;
-        await processLoginResult(authUrl);
-      } else {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, finalRedirectUri, { showInRecents: true });
-        console.log('📱 [email-login] Google OAuth result:', result.type);
-
-        if (result.type === 'cancel') {
-          if (isMountedRef.current) setLoading(false);
-          return;
-        }
-
-        if (result.type === 'success' && result.url) {
-          await processLoginResult(result.url);
+        if (error) throw error;
+        if (sessionData?.session?.user) {
+          await handleOAuthSuccess(sessionData.session.user);
         } else {
-          if (isMountedRef.current) setLoading(false);
+          throw new Error('Could not establish session.');
         }
+      } else {
+        throw new Error('No identity token returned from Google.');
       }
     } catch (err: any) {
-      console.warn('⚠️ [email-login] Google OAuth exception:', err);
-      showAlert('Google Login Error', err?.message ?? String(err));
+      console.warn('⚠️ [email-login] Google native login exception:', err);
+      // SIGN_IN_CANCELLED or similar codes can be checked if needed, but a silent abort or clear error alert is safe.
+      if (err?.code !== 'SIGN_IN_CANCELLED' && err?.message !== 'Sign in action cancelled') {
+        showAlert('Google Login Error', err?.message ?? String(err));
+      }
       if (isMountedRef.current) setLoading(false);
     }
   };
