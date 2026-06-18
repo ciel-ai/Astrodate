@@ -170,14 +170,14 @@ function RootLayout() {
               console.log('🔗 [Layout] Cold-start email verification link routed directly');
               try {
                 WebBrowser.dismissBrowser();
-              } catch (e) {}
+              } catch (e) { console.warn('[WebBrowser] dismissBrowser failed:', e); }
               finishBoot(`/auth/verify?url=${encodeURIComponent(initialUrl)}` as Href);
               return;
             } else if (isAuthCallbackLink) {
               console.log('🔗 [Layout] Cold-start OAuth callback link routed directly');
               try {
                 WebBrowser.dismissBrowser();
-              } catch (e) {}
+              } catch (e) { console.warn('[WebBrowser] dismissBrowser failed:', e); }
               finishBoot(`/auth/callback?url=${encodeURIComponent(initialUrl)}` as Href);
               return;
             }
@@ -323,7 +323,7 @@ function RootLayout() {
       console.log('🔗 [Layout] Email verification deep link detected:', url);
       try {
         WebBrowser.dismissBrowser();
-      } catch (e) {}
+      } catch (e) { console.warn('[WebBrowser] dismissBrowser failed:', e); }
 
       // Ensure splash screen is hidden and app is marked ready on deep link cold-start
       hasNavigatedRef.current = true;
@@ -340,7 +340,7 @@ function RootLayout() {
       console.log('🔗 [Layout] OAuth callback deep link detected:', url);
       try {
         WebBrowser.dismissBrowser();
-      } catch (e) {}
+      } catch (e) { console.warn('[WebBrowser] dismissBrowser failed:', e); }
 
       // Ensure splash screen is hidden and app is marked ready on deep link cold-start
       hasNavigatedRef.current = true;
@@ -463,9 +463,6 @@ function RootLayout() {
       isMounted = false;
       subscription.remove();
       clearStatusInterval();
-      supabase.auth.getUser()
-        .then(({ data }) => { if (data?.user) updateOnlineStatus(false).catch(() => { }); })
-        .catch(() => { });
     };
   }, []); // EMPTY DEPS
 

@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  Alert,
   Modal,
   Platform,
   StyleSheet,
@@ -27,6 +28,7 @@ type ChatModalsProps = {
   userName: string;
   onUnmatch: () => Promise<void>;
   onReport: () => Promise<void>;
+  onBlock: () => Promise<void>;
 };
 
 function getSubcategoriesForCategory(category: string): string[] {
@@ -43,7 +45,7 @@ function getSubcategoriesForCategory(category: string): string[] {
 }
 
 const ChatModals = forwardRef<ChatModalsRef, ChatModalsProps>(function ChatModals(
-  { chatId, channelId, userName, onUnmatch, onReport },
+  { chatId, channelId, userName, onUnmatch, onReport, onBlock },
   ref,
 ) {
   const [showMenuModal, setShowMenuModal] = useState(false);
@@ -122,6 +124,18 @@ const ChatModals = forwardRef<ChatModalsRef, ChatModalsProps>(function ChatModal
     await onReport();
   }, [reportSaved, chatId, channelId, selectedReportCategory, selectedReportSubcategory, reportDetails, onReport, showAlert]);
 
+  const handleBlock = useCallback(() => {
+    setShowMenuModal(false);
+    Alert.alert(
+      `Block ${userName}`,
+      `${userName} won't be able to message you or see your profile. They won't be notified.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Block', style: 'destructive', onPress: () => onBlock() },
+      ],
+    );
+  }, [userName, onBlock]);
+
   const openReport = useCallback(() => {
     setShowMenuModal(false);
     setReportSaved(false);
@@ -143,6 +157,10 @@ const ChatModals = forwardRef<ChatModalsRef, ChatModalsProps>(function ChatModal
             <View style={styles.menuDivider} />
             <TouchableOpacity style={styles.menuOption} onPress={() => { setShowMenuModal(false); setShowUnmatchModal(true); }} activeOpacity={0.7}>
               <Text style={styles.menuOptionText}>Unmatch</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity style={styles.menuOption} onPress={handleBlock} activeOpacity={0.7}>
+              <Text style={[styles.menuOptionText, styles.menuOptionTextDanger]}>Block</Text>
             </TouchableOpacity>
             <View style={styles.menuDivider} />
             <TouchableOpacity style={styles.menuOption} onPress={openReport} activeOpacity={0.7}>
@@ -444,7 +462,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   menuModal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(26, 11, 46, 0.98)',
     borderRadius: 12,
     position: 'absolute',
     top: Platform.OS === 'ios' ? 100 : 80,
@@ -453,9 +471,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   menuOption: {
     paddingVertical: 16,
@@ -463,7 +483,7 @@ const styles = StyleSheet.create({
   },
   menuOptionText: {
     fontSize: 16,
-    color: '#1B1528',
+    color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
   },
   menuOptionTextDanger: {
@@ -471,7 +491,7 @@ const styles = StyleSheet.create({
   },
   menuDivider: {
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginHorizontal: 20,
   },
   // Did you meet

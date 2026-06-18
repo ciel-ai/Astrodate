@@ -92,13 +92,6 @@ export function ProfileHeader({ data }: { data: ProfileData }) {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.headerIconButton}
-            onPress={() => router.push('/filters')}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="tune" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerIconButton}
             onPress={() => router.push('/settings')}
             activeOpacity={0.7}
           >

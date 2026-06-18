@@ -18,7 +18,10 @@
         "NSMicrophoneUsageDescription": "AstroDate needs access to your microphone so you can record and send voice messages in chats.",
         "NSLocationWhenInUseUsageDescription": "AstroDate uses your location to auto-fill your city and to show matches near you. Your exact location is never shared with other users.",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSUserTrackingUsageDescription": "AstroDate uses your device identifier to measure subscription analytics via RevenueCat and personalise your match recommendations. Your data is never shared with advertisers."
+        "NSUserTrackingUsageDescription": "AstroDate uses your device identifier to measure subscription analytics via RevenueCat and personalise your match recommendations. Your data is never shared with advertisers.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [

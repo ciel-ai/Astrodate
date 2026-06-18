@@ -623,9 +623,13 @@ export default function DiscoverScreen() {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
             marginHorizontal: 16,
-            marginTop: insets.top + 8,
+            marginTop: insets.top + 72,
             borderRadius: 12,
+            zIndex: 110,
             padding: 12,
             flexDirection: 'row',
             alignItems: 'center',
@@ -660,11 +664,15 @@ export default function DiscoverScreen() {
         />
       )}
       {/* ── Fallback Feed Banner ─────────────────────────────────────────── */}
-      {isFallbackFeed && profiles.length > 0 && (
+      {false && isFallbackFeed && profiles.length > 0 && (
         <View style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
           marginHorizontal: 16,
-          marginTop: insets.top + 8,
+          marginTop: insets.top + 72,
           borderRadius: 12,
+          zIndex: 110,
           padding: 12,
           backgroundColor: 'rgba(255, 193, 7, 0.15)',
           borderWidth: 1,

@@ -11,6 +11,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRouter } from 'expo-router';
 import { SUPABASE_URL } from '@/lib/supabase';
+import { deleteSecureItem } from '@/lib/secure-storage';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
@@ -328,6 +329,8 @@ export default function SettingsScreen() {
           isLoggingOutRef.current = true;
           try {
             await deactivateCurrentDevicePushToken();
+            await deleteSecureItem('userBasicDetails').catch(() => {});
+            await deleteSecureItem('userBirthDetails').catch(() => {});
             await supabase.auth.signOut();
             // navigation handled by SIGNED_OUT listener
           } catch {

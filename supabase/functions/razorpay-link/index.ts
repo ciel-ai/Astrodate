@@ -141,18 +141,38 @@ serve(async (req) => {
 
     const data = await razorpayRes.json();
 
-    const { error: insertError } = await adminClient
+    const { data: existingSubs } = await adminClient
       .from('user_subscriptions')
-      .insert({
-        user_id: userId,
-        plan_id: planId,
-        status: 'incomplete',
-        razorpay_payment_link_id: data.id,
-      });
+      .select('id, status')
+      .eq('user_id', userId)
+      .limit(1);
 
-    if (insertError) {
-      console.error('Failed to insert user subscription:', JSON.stringify(insertError));
-      return new Response(JSON.stringify({ error: 'Database Error', detail: insertError.message, code: insertError.code }), {
+    let dbError = null;
+    if (existingSubs && existingSubs.length > 0) {
+      const { error } = await adminClient
+        .from('user_subscriptions')
+        .update({
+          plan_id: planId,
+          status: 'incomplete',
+          razorpay_payment_link_id: data.id,
+        })
+        .eq('id', existingSubs[0].id);
+      dbError = error;
+    } else {
+      const { error } = await adminClient
+        .from('user_subscriptions')
+        .insert({
+          user_id: userId,
+          plan_id: planId,
+          status: 'incomplete',
+          razorpay_payment_link_id: data.id,
+        });
+      dbError = error;
+    }
+
+    if (dbError) {
+      console.error('Failed to save user subscription:', JSON.stringify(dbError));
+      return new Response(JSON.stringify({ error: 'Database Error', detail: dbError.message, code: dbError.code }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

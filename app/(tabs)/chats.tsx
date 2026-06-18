@@ -11,19 +11,19 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  AppState,
-  Modal,
-  RefreshControl,
-  SectionList,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+    ActivityIndicator,
+    AppState,
+    Modal,
+    RefreshControl,
+    SectionList,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    TouchableWithoutFeedback,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -87,6 +87,7 @@ type ChatItem = {
   id: string;
   name: string;
   lastMessage: string;
+  lastMessageImageUrl?: string;
   time: string;
   unreadCount?: number;
   isRead?: boolean;
@@ -166,14 +167,32 @@ function ChatItemComponent({
           </View>
         ) : chat.hasConversation && chat.lastMessage ? (
           <View style={styles.chatFooter}>
-            <Text
-              style={[
-                styles.chatMessage,
-                chat.unreadCount && chat.unreadCount > 0 ? styles.unreadMessage : null,
-              ]}
-              numberOfLines={1}>
-              {chat.lastMessage}
-            </Text>
+            {chat.lastMessageImageUrl ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <ExpoImage
+                  source={{ uri: chat.lastMessageImageUrl }}
+                  style={{ width: 36, height: 36, borderRadius: 4 }}
+                  contentFit="cover"
+                />
+                <Text
+                  style={[
+                    styles.chatMessage,
+                    chat.unreadCount && chat.unreadCount > 0 ? styles.unreadMessage : null,
+                  ]}
+                  numberOfLines={1}>
+                  {chat.lastMessage}
+                </Text>
+              </View>
+            ) : (
+              <Text
+                style={[
+                  styles.chatMessage,
+                  chat.unreadCount && chat.unreadCount > 0 ? styles.unreadMessage : null,
+                ]}
+                numberOfLines={1}>
+                {chat.lastMessage}
+              </Text>
+            )}
           </View>
         ) : (
           <View style={styles.chatFooter}>
@@ -327,7 +346,10 @@ export default function ChatsScreen() {
 
   const isFetchingRef = useRef(false);
   const sortedUserIds = chats.map((c) => c.id).sort().join(',');
-  const chatChannelIds = chats.map((c) => c.channelId).filter(Boolean).sort().join(',');
+  const chatChannelIds = useMemo(
+    () => chats.map((c) => c.channelId).filter(Boolean).sort().join(','),
+    [chats]
+  );
 
   // Fetch users from backend with last messages
   const fetchUsers = useCallback(async (isRefresh = false) => {
@@ -394,6 +416,7 @@ export default function ChatsScreen() {
           const unreadCount = unreadCountsMap.get(user.user_id) || 0;
 
           let lastMessage = '';
+          let lastMessageImageUrl: string | undefined = undefined;
           let time = '';
           let timestamp: Date | undefined = undefined;
           let isRead = true;
@@ -401,8 +424,16 @@ export default function ChatsScreen() {
 
           if (lastMsg) {
             hasConversation = true;
-            // Show "You: " prefix for sent messages
-            lastMessage = lastMsg.isSentByMe ? `You: ${lastMsg.message}` : lastMsg.message;
+            const raw = lastMsg.message;
+            const prefix = lastMsg.isSentByMe ? 'You: ' : '';
+            if (raw.startsWith('📷 Photo: http')) {
+              lastMessageImageUrl = raw.replace('📷 Photo: ', '');
+              lastMessage = `${prefix}📷 Photo`;
+            } else if (raw.startsWith('🎬 Video: http')) {
+              lastMessage = `${prefix}🎬 Video`;
+            } else {
+              lastMessage = `${prefix}${raw}`;
+            }
             timestamp = lastMsg.timestamp;
             time = formatTimestamp(lastMsg.timestamp);
             isRead = lastMsg.isRead;
@@ -416,6 +447,7 @@ export default function ChatsScreen() {
             id: user.user_id,
             name: user.full_name,
             lastMessage,
+            lastMessageImageUrl,
             time,
             timestamp,
             isRead,
@@ -772,8 +804,8 @@ export default function ChatsScreen() {
 
   // Keep inbox synced with auth session readiness and app resume events.
   useEffect(() => {
-    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
         void fetchUsers();
       }
     });
@@ -797,10 +829,16 @@ export default function ChatsScreen() {
     };
   }, [fetchUsers]);
 
+  const lastFetchTimeRef = useRef<number>(0);
+
   // Refresh users when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      fetchUsers();
+      const now = Date.now();
+      if (now - lastFetchTimeRef.current > 30_000) {
+        lastFetchTimeRef.current = now;
+        fetchUsers();
+      }
     }, [fetchUsers])
   );
 
@@ -979,12 +1017,6 @@ export default function ChatsScreen() {
               onChangeText={setSearchQuery}
             />
           </View>
-          <TouchableOpacity
-            style={styles.filterButton}
-            activeOpacity={0.7}
-            onPress={() => router.push('/filters')}>
-            <MaterialIcons name="tune" size={22} color="rgba(255, 255, 255, 0.8)" />
-          </TouchableOpacity>
         </View>
 
         <SectionList
