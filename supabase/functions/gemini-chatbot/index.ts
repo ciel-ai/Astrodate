@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +13,7 @@ type ChatHistoryItem = {
 
 type GeminiRequestBody = {
   message?: unknown;
+  prompt?: unknown;
   conversationHistory?: unknown;
 };
 
@@ -32,11 +34,12 @@ Deno.serve(async (req: Request) => {
   try {
     // 2. Validate request body
     const body = await req.json() as GeminiRequestBody;
-    const { message, conversationHistory } = body || {};
+    const { conversationHistory } = body || {};
+    const message = (body?.message || body?.prompt) as string | undefined;
 
     // Basic payload validation to prevent abuse
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return new Response(JSON.stringify({ error: 'Message is required' }), {
+      return new Response(JSON.stringify({ error: 'Message or prompt is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -72,27 +75,25 @@ Deno.serve(async (req: Request) => {
     }
     const jwt = tokenMatch[1];
 
-    // Validate token with Supabase Auth endpoint
+    // Validate token with Supabase Auth
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    if (!SUPABASE_URL) {
-      console.error('Missing SUPABASE_URL env');
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error('Missing Supabase credentials');
       return new Response(JSON.stringify({ success: false, error: 'Server misconfiguration' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const userResp = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/auth/v1/user`, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${jwt}` },
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
     });
 
-    if (!userResp.ok) {
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+    if (authError || !user) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const userJson = await userResp.json();
-    const userId = userJson?.id;
-    if (!userId) {
-      return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
+    const userId = user.id;
 
     // 2b. Enforce per-user daily quota via RPC using service role key
     const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -103,24 +104,18 @@ Deno.serve(async (req: Request) => {
 
     // Call RPC to increment usage atomically and enforce limit
     try {
-      const rpcResp = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rpc/increment_ai_usage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SERVICE_ROLE}`,
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ p_user: userId, p_endpoint: 'gemini-chatbot', p_limit: 20 }),
+      const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE);
+      const { data: allowed, error: rpcError } = await adminClient.rpc('increment_ai_usage', {
+        p_user: userId,
+        p_endpoint: 'gemini-chatbot',
+        p_limit: 20,
       });
 
-      if (!rpcResp.ok) {
-        console.error('RPC increment_ai_usage failed', await rpcResp.text());
+      if (rpcError) {
+        console.error('RPC increment_ai_usage failed', rpcError);
         return new Response(JSON.stringify({ success: false, error: 'Rate limit check failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      const rpcJson = await rpcResp.json();
-      // RPC returns a boolean or an array with a boolean; normalize
-      const allowed = Array.isArray(rpcJson) ? rpcJson[0] === true : rpcJson === true || rpcJson === 't' || rpcJson === 1;
       if (!allowed) {
         return new Response(JSON.stringify({ success: false, error: 'Daily AI limit reached. Try again tomorrow.' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
@@ -146,7 +141,7 @@ Deno.serve(async (req: Request) => {
 
     // 5. Call external API securely
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,7 +163,14 @@ Deno.serve(async (req: Request) => {
     if (!res.ok) {
       const errorText = await res.text();
       console.error("Gemini API error:", res.status, errorText);
-      throw new Error(`External API returned status ${res.status}`);
+      let apiErrorMessage = `External API returned status ${res.status}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson?.error?.message) {
+          apiErrorMessage = errorJson.error.message;
+        }
+      } catch {}
+      throw new Error(apiErrorMessage);
     }
 
     const data = await res.json() as GeminiApiResponse;

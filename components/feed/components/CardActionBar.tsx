@@ -2,6 +2,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
 import React from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -11,6 +12,7 @@ const { height: STATIC_HEIGHT } = Dimensions.get('window');
 const AnimatedFontAwesome = Animated.createAnimatedComponent(FontAwesome);
 const AnimatedIonicons = Animated.createAnimatedComponent(Ionicons);
 const AnimatedMaterialIcons = Animated.createAnimatedComponent(MaterialIcons);
+const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 interface CardActionBarProps {
   onLike: () => void;
@@ -81,7 +83,11 @@ export function CardActionBar({
         >
           <Animated.View style={[styles.actionIconGlassy, superLikeButtonScale, superLikeButtonColorStyle]}>
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
-            <AnimatedIonicons name="star" size={28} style={superLikeIconStyle} />
+            <AnimatedImage
+              source={require('../../../assets/images/zodiac-superlike.png')}
+              style={[styles.superLikeIconImage, superLikeIconStyle]}
+              contentFit="contain"
+            />
           </Animated.View>
           {superLikesRemaining !== null && superLikesRemaining <= 2 && superLikesRemaining < 999 && (
             <View style={styles.superLikeCountBadge}>
@@ -148,6 +154,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
+  },
+  superLikeIconImage: {
+    width: STATIC_HEIGHT < 750 ? 56 : 62,
+    height: STATIC_HEIGHT < 750 ? 56 : 62,
   },
   superLikeCountBadge: {
     position: 'absolute',

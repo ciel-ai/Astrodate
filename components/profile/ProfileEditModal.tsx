@@ -229,7 +229,7 @@ export function ProfileEditModal({ data }: { data: ProfileData }) {
                 style={styles.addButton}
                 onPress={() => setShowLookingForPicker(true)}
                 activeOpacity={0.7}>
-                <MaterialIcons name="add" size={20} color="#7C3AED" />
+                <MaterialIcons name="add" size={20} color="#7C3AED" style={styles.addButtonIcon} />
                 <Text style={styles.addButtonText}>Add Looking For</Text>
               </TouchableOpacity>
             </View>
@@ -254,7 +254,7 @@ export function ProfileEditModal({ data }: { data: ProfileData }) {
                 style={styles.addButton}
                 onPress={() => setShowInterestPicker(true)}
                 activeOpacity={0.7}>
-                <MaterialIcons name="add" size={20} color="#7C3AED" />
+                <MaterialIcons name="add" size={20} color="#7C3AED" style={styles.addButtonIcon} />
                 <Text style={styles.addButtonText}>Add Interest</Text>
               </TouchableOpacity>
             </View>
@@ -328,7 +328,7 @@ export function ProfileEditModal({ data }: { data: ProfileData }) {
                 style={styles.addButton}
                 onPress={() => setShowLanguagePicker(true)}
                 activeOpacity={0.7}>
-                <MaterialIcons name="add" size={20} color="#7C3AED" />
+                <MaterialIcons name="add" size={20} color="#7C3AED" style={styles.addButtonIcon} />
                 <Text style={styles.addButtonText}>Add Language</Text>
               </TouchableOpacity>
             </View>

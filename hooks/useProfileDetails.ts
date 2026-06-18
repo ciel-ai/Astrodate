@@ -178,9 +178,9 @@ export function useProfileDetails(userId: string | null): UseProfileDetailsResul
             match?.indian_recommendation || match?.western_report || undefined,
           about_me: onboardingData?.about_me || undefined,
           interests:
-            section1Result.success && section1Result.data?.interest
-              ? Array.isArray(section1Result.data.interest)
-                ? section1Result.data.interest
+            section1Result.success && section1Result.data?.hobbies
+              ? Array.isArray(section1Result.data.hobbies)
+                ? section1Result.data.hobbies
                 : []
               : onboardingData?.interests
               ? (() => {

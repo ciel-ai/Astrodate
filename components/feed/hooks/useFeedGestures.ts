@@ -251,7 +251,7 @@ export function useFeedGestures({
 
   const superLikeIconStyle = useAnimatedStyle(() => {
     const opacityVal = interpolate(translateY.value, [0, -20], [0.8, 1], 'clamp');
-    return { color: '#FFFFFF', opacity: opacityVal };
+    return { opacity: opacityVal };
   });
 
   const nextCardStyle = useAnimatedStyle(() => {

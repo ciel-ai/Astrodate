@@ -5,5 +5,32 @@
     "source.sortMembers": "explicit"
   },
   "typescript.tsserver.experimental.enableProjectDiagnostics": false,
-  "deno.enable": true
+  "deno.enable": true,
+
+  // ── Java / Gradle: stop scanning node_modules for Android build files ──────
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.expo/**",
+    "**/android/build/**",
+    "**/ios/build/**",
+    "**/build/**"
+  ],
+  "java.project.referencedLibraries": [],
+  "java.autobuild.enabled": false,
+  "java.import.gradle.enabled": false,
+  "java.import.gradle.wrapper.enabled": false,
+  "java.import.maven.enabled": false,
+  "gradle.nestedProjects": false,
+  "gradle.autoDetect": "off",
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.expo/**": true,
+    "**/android/build/**": true,
+    "**/ios/build/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.expo": true
+  }
 }
+

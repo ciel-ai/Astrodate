@@ -505,9 +505,9 @@ export function useProfileData(): ProfileData {
         return;
       }
 
-      if (!profileDbFields?.phone_number || !profileDbFields?.email) {
+      if (!profileDbFields?.email) {
         if (isMountedRef.current) {
-          showAlert('Profile data missing', 'Phone number or email is missing in your account. Please complete onboarding first.');
+          showAlert('Profile data missing', 'Email is missing in your account. Please complete onboarding first.');
           setLoading(false);
         }
         return;

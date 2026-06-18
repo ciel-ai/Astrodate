@@ -1,7 +1,5 @@
-
 import { GlobalAuthAlertModal } from '@/components/global-auth-alert-modal';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthAlertProvider } from '@/lib/auth-alert-context';
 import { SubscriptionProvider } from '@/hooks/useSubscriptionStatus';
 import { ensureRevenueCatConfigured } from '@/lib/useSubscriptionPayment';
@@ -13,14 +11,14 @@ import { updateOnlineStatus } from '@/lib/online-status';
 import { releaseAllOwnedRealtimeChannels } from '@/lib/realtime-channels';
 import { supabase } from '@/lib/supabase';
 import { resetGlobalTypingChannel } from '@/lib/typing-status';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import * as Notifications from 'expo-notifications';
-import { Stack, useRouter, useSegments, type Href } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { ActivityIndicator, AppState, AppStateStatus, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,7 +33,6 @@ type ProfileLookupResult = {
 };
 
 function RootLayout() {
-  const colorScheme = useColorScheme();
   const router = useRouter();
   const segments = useSegments();
   const [isReady, setIsReady] = useState(false);
@@ -47,6 +44,56 @@ function RootLayout() {
   const lastRouteRef = useRef<string | null>(null);
   const navigationInFlightRef = useRef(false);
   const processedDeepLinkRef = useRef<string | null>(null);
+
+  const rootNavigationState = useRootNavigationState();
+  const isNavigationReady = rootNavigationState?.key != null;
+  const [bootRoute, setBootRoute] = useState<Href | null>(null);
+
+  const markReady = useCallback(() => {
+    if (!isMountedRef.current || isReadyRef.current) return;
+    isReadyRef.current = true;
+    setIsReady(true);
+  }, []);
+
+  const hideSplashSafely = useCallback(() => {
+    SplashScreen.hideAsync().catch(() => { });
+  }, []);
+
+  const routeFromSegments = useCallback(() => {
+    const current = segmentsRef.current;
+    return current.length ? `/${current.join('/')}` : '/';
+  }, []);
+
+  const safeReplace = useCallback((route: Href) => {
+    if (!isMountedRef.current) return;
+    const nextRoute = String(route);
+    const currentRoute = routeFromSegments();
+    if (navigationInFlightRef.current || lastRouteRef.current === nextRoute || currentRoute === nextRoute) return;
+
+    console.log('[Nav] redirect', nextRoute);
+
+    navigationInFlightRef.current = true;
+    lastRouteRef.current = nextRoute;
+    router.replace(route);
+    setTimeout(() => {
+      navigationInFlightRef.current = false;
+    }, 0);
+  }, [router, routeFromSegments]);
+
+  const finishBoot = useCallback((route: Href) => {
+    if (!isMountedRef.current || hasNavigatedRef.current) return;
+    hasNavigatedRef.current = true;
+    
+    // Defer deep link / normal boot navigation until navigation state is mounted
+    setBootRoute(route);
+
+    markReady();
+    hideSplashSafely();
+    if (hardTimeoutRef.current) {
+      clearTimeout(hardTimeoutRef.current);
+      hardTimeoutRef.current = null;
+    }
+  }, [markReady, hideSplashSafely]);
 
   useEffect(() => {
     segmentsRef.current = [...segments];
@@ -82,50 +129,6 @@ function RootLayout() {
     //   AsyncStorage.clear().catch(() => { });
     // }
 
-    const routeFromSegments = () => {
-      const current = segmentsRef.current;
-      return current.length ? `/${current.join('/')}` : '/';
-    };
-
-    const safeReplace = (route: Href) => {
-      if (!isMountedRef.current) return;
-      const nextRoute = String(route);
-      const currentRoute = routeFromSegments();
-      if (navigationInFlightRef.current || lastRouteRef.current === nextRoute || currentRoute === nextRoute) return;
-
-      console.log('[Nav] redirect', nextRoute);
-
-      navigationInFlightRef.current = true;
-      lastRouteRef.current = nextRoute;
-      router.replace(route);
-      setTimeout(() => {
-        navigationInFlightRef.current = false;
-      }, 0);
-    };
-
-    const markReady = () => {
-      if (!isMountedRef.current || isReadyRef.current) return;
-      isReadyRef.current = true;
-      setIsReady(true);
-    };
-
-    const hideSplashSafely = () => {
-      SplashScreen.hideAsync().catch(() => { });
-    };
-
-    const finishBoot = (route: Href) => {
-      if (!isMountedRef.current || hasNavigatedRef.current) return;
-      hasNavigatedRef.current = true;
-      // Navigate first (Stack is already mounted), then remove spinner
-      safeReplace(route);
-      markReady();
-      hideSplashSafely();
-      if (hardTimeoutRef.current) {
-        clearTimeout(hardTimeoutRef.current);
-        hardTimeoutRef.current = null;
-      }
-    };
-
     // Helper to detect if a session token is present locally without hitting network
     const checkLocalSession = async () => {
       try {
@@ -150,6 +153,42 @@ function RootLayout() {
           await requestTrackingPermissionsAsync();
         }
         await ensureRevenueCatConfigured(); // init once here
+
+        // ── Cold-start Deep Link Interception ───────────────────────────────────
+        // If the app was launched by clicking a deep link (OAuth callback or email verify),
+        // we intercept it here to bypass the standard boot routing (welcome or tabs).
+        // This prevents the React Navigation routing crash by routing directly via finishBoot.
+        try {
+          const initialUrl = await Linking.getInitialURL();
+          if (initialUrl) {
+            console.log('🔗 [Layout] Initial URL detected during bootstrap:', initialUrl);
+            const hasStrictType = initialUrl.includes('&type=') || initialUrl.includes('?type=');
+            const isEmailVerificationLink = 
+              initialUrl.includes('auth/verify') ||
+              (initialUrl.includes('token_hash') && hasStrictType) ||
+              (initialUrl.includes('access_token') && hasStrictType);
+
+            const isAuthCallbackLink = initialUrl.includes('auth/callback');
+
+            if (isEmailVerificationLink) {
+              console.log('🔗 [Layout] Cold-start email verification link routed directly');
+              try {
+                WebBrowser.dismissBrowser();
+              } catch (e) {}
+              finishBoot(`/auth/verify?url=${encodeURIComponent(initialUrl)}` as Href);
+              return;
+            } else if (isAuthCallbackLink) {
+              console.log('🔗 [Layout] Cold-start OAuth callback link routed directly');
+              try {
+                WebBrowser.dismissBrowser();
+              } catch (e) {}
+              finishBoot(`/auth/callback?url=${encodeURIComponent(initialUrl)}` as Href);
+              return;
+            }
+          }
+        } catch (coldStartErr) {
+          console.warn('[Layout] Cold-start deep link check failed (non-fatal):', coldStartErr);
+        }
 
         // Session check — 8s timeout
         const sessionResult = await Promise.race([
@@ -237,6 +276,18 @@ function RootLayout() {
     };
   }, []); // EMPTY DEPS — must never be changed
 
+  // ─── BOOT ROUTE NAVIGATION DEFERRAL ─────────────────────────────────────────
+  //
+  // Defers the actual navigation replacement until the Expo Router navigation
+  // container is fully mounted and ready (rootNavigationState?.key != null).
+  // This prevents the fatal React Navigation crash when cold-starting from deep links.
+  useEffect(() => {
+    if (isNavigationReady && bootRoute) {
+      console.log('[Layout] Navigation container ready — executing boot route:', bootRoute);
+      safeReplace(bootRoute);
+    }
+  }, [isNavigationReady, bootRoute, safeReplace]);
+
   useEffect(() => {
     const responseListener = Notifications.addNotificationResponseReceivedListener((response: { notification: { request: { content: { data: any; }; }; }; }) => {
       const data = response.notification.request.content.data as any;
@@ -269,48 +320,70 @@ function RootLayout() {
   // We intentionally do NOT navigate here — instead we push to /auth/verify which
   // handles the full token exchange + routing logic. This keeps the layout clean.
 
+  const processDeepLink = useCallback((url: string) => {
+    if (!isMountedRef.current || processedDeepLinkRef.current === url) return;
+
+    const currentRoute = routeFromSegments();
+    if (currentRoute.includes('auth/callback') || currentRoute.includes('auth/verify')) {
+      console.log('⏳ [Layout] Deep link received but already on auth screen:', currentRoute);
+      return;
+    }
+
+    const hasStrictType = url.includes('&type=') || url.includes('?type=');
+    const isEmailVerificationLink = 
+      url.includes('auth/verify') ||
+      (url.includes('token_hash') && hasStrictType) ||
+      (url.includes('access_token') && hasStrictType);
+
+    const isAuthCallbackLink = url.includes('auth/callback');
+
+    if (isEmailVerificationLink) {
+      processedDeepLinkRef.current = url;
+      console.log('🔗 [Layout] Email verification deep link detected:', url);
+      try {
+        WebBrowser.dismissBrowser();
+      } catch (e) {}
+
+      // Ensure splash screen is hidden and app is marked ready on deep link cold-start
+      hasNavigatedRef.current = true;
+      markReady();
+      hideSplashSafely();
+      if (hardTimeoutRef.current) {
+        clearTimeout(hardTimeoutRef.current);
+        hardTimeoutRef.current = null;
+      }
+
+      router.push(`/auth/verify?url=${encodeURIComponent(url)}` as Href);
+    } else if (isAuthCallbackLink) {
+      processedDeepLinkRef.current = url;
+      console.log('🔗 [Layout] OAuth callback deep link detected:', url);
+      try {
+        WebBrowser.dismissBrowser();
+      } catch (e) {}
+
+      // Ensure splash screen is hidden and app is marked ready on deep link cold-start
+      hasNavigatedRef.current = true;
+      markReady();
+      hideSplashSafely();
+      if (hardTimeoutRef.current) {
+        clearTimeout(hardTimeoutRef.current);
+        hardTimeoutRef.current = null;
+      }
+
+      router.push(`/auth/callback?url=${encodeURIComponent(url)}` as Href);
+    }
+  }, [router, routeFromSegments, markReady, hideSplashSafely]);
+
   useEffect(() => {
-    const processVerifyLink = (url: string) => {
-      if (!isMountedRef.current || processedDeepLinkRef.current === url) return;
-      // Only intercept actual email verification links, NOT Google OAuth links.
-      // Email links contain type=signup, type=recovery, type=email_change, etc.
-      // Use '&type=' or '?type=' to avoid matching 'token_type=bearer' from OAuth.
-      const hasStrictType = url.includes('&type=') || url.includes('?type=');
-      const isEmailVerificationLink = 
-        url.includes('auth/verify') ||
-        (url.includes('token_hash') && hasStrictType) ||
-        (url.includes('access_token') && hasStrictType);
-
-      if (isEmailVerificationLink) {
-        processedDeepLinkRef.current = url;
-        console.log('🔗 [Layout] Email verification deep link detected:', url);
-        // FIX BUG 2: Pass the URL as a param so verify.tsx doesn't need to call
-        // getInitialURL() again (which can return null on the second call on Android).
-        router.push({ pathname: '/auth/verify', params: { url: encodeURIComponent(url) } });
-      }
-    };
-
-    // Cold-start: app was opened from the link
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('🔗 [Layout] Initial URL on cold start:', url);
-        processVerifyLink(url);
-      }
-    }).catch(console.warn);
-
     // Warm-start: link opened while app was running
     const linkSub = Linking.addEventListener('url', ({ url }) => {
       console.log('🔗 [Layout] Incoming URL (warm):', url);
-      // On Android, Chrome Custom Tab shows a blank white page when it redirects
-      // to a custom scheme (exp:// or astrodate://). Calling maybeCompleteAuthSession()
-      // here signals any waiting openAuthSessionAsync to close the tab and return
-      // the redirect URL as a successful result.
       WebBrowser.maybeCompleteAuthSession();
-      processVerifyLink(url);
+      processDeepLink(url);
     });
 
     return () => linkSub.remove();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [processDeepLink]);
   //
   // ROOT CAUSE OF REPEATED "App started" LOG (fixed here):
   //
@@ -420,15 +493,15 @@ function RootLayout() {
   // Spinner is an absolute overlay that disappears once isReady=true.
   return (
     <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#04020b' }}>
         <AuthAlertProvider>
         <SubscriptionProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <ThemeProvider value={{ ...DarkTheme, colors: { ...DarkTheme.colors, background: '#04020b', card: '#04020b' } }}>
             <OfflineBanner />
             <Stack
               screenOptions={{
                 contentStyle: {
-                  backgroundColor: Platform.OS === 'android' ? '#1A0B2E' : undefined,
+                  backgroundColor: '#04020b',
                 },
               }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />

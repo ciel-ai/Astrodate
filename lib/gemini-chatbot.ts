@@ -75,59 +75,40 @@ export const sendMessageToGemini = async (
     let error: FunctionErrorLike | Error | null = null;
 
     try {
-      // First try using supabase.functions.invoke() (automatically includes auth token)
-      const result = await invokeSupabaseFunctionWithTimeout(
-        () => supabase.functions.invoke('gemini-chatbot', {
-          body: {
+      // Get the session token for authentication
+      const sessionResult = await supabase.auth.getSession();
+      const session = sessionResult?.data?.session;
+      const authToken = session?.access_token || SUPABASE_ANON_KEY;
+
+      const response = await fetchWithTimeout(
+        `${SUPABASE_URL}/functions/v1/gemini-chatbot`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
             message: userMessage,
             conversationHistory: serializedHistory satisfies SerializedChatMessage[],
-          },
-        }),
+          }),
+        },
         20000
       );
 
-      data = asGeminiFunctionResponse(result.data);
-      error = result.error;
-    } catch (invokeError) {
-      // If invoke fails, try direct fetch as fallback
-      console.warn('supabase.functions.invoke() failed, trying direct fetch:', invokeError);
-
-      try {
-        // Get the session token for authentication
-        const sessionResult = await supabase.auth.getSession();
-        const session = sessionResult?.data?.session;
-        const authToken = session?.access_token || SUPABASE_ANON_KEY;
-
-        const response = await fetchWithTimeout(
-          `${SUPABASE_URL}/functions/v1/gemini-chatbot`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': SUPABASE_ANON_KEY,
-              'Authorization': `Bearer ${authToken}`,
-            },
-            body: JSON.stringify({
-              message: userMessage,
-            conversationHistory: serializedHistory satisfies SerializedChatMessage[],
-            }),
-          },
-          20000
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          error = {
-            name: 'FunctionsHttpError',
-            message: errorData.error || `HTTP ${response.status}`,
-            context: { status: response.status },
-          };
-        } else {
-          data = asGeminiFunctionResponse(await response.json());
-        }
-      } catch (fetchError) {
-        error = fetchError as Error;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        error = {
+          name: 'FunctionsHttpError',
+          message: errorData.error || `HTTP ${response.status}`,
+          context: { status: response.status },
+        };
+      } else {
+        data = asGeminiFunctionResponse(await response.json());
       }
+    } catch (fetchError) {
+      error = fetchError as Error;
     }
 
     if (error) {

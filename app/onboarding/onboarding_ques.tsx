@@ -7,12 +7,12 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Pressable,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
     View
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
@@ -349,6 +349,7 @@ const COLORS = {
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [pageIndex, setPageIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState(false);
@@ -551,7 +552,7 @@ export default function OnboardingScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header */}
         {!isIntroPage && !questionIsInfo && (
           <View style={styles.header}>
@@ -578,7 +579,7 @@ export default function OnboardingScreen() {
             </View>
             <View style={styles.introFooter}>
               <Pressable
-                style={styles.introArrowButton}
+                style={[styles.introArrowButton, { bottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }]}
                 onPress={handleContinue}
                 hitSlop={10}>
                 <MaterialIcons
@@ -597,7 +598,7 @@ export default function OnboardingScreen() {
               who understands <Text style={styles.midInfoTitleAccent}>a lot.</Text>
             </Text>
             <Pressable
-              style={styles.midInfoArrowButton}
+              style={[styles.midInfoArrowButton, { bottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }]}
               onPress={handleContinue}
               hitSlop={10}>
               <MaterialIcons name="arrow-forward" size={24} color={COLORS.background} />
@@ -606,6 +607,7 @@ export default function OnboardingScreen() {
         ) : (
           <ScrollView
             ref={scrollViewRef}
+            style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}>
             {/* Questions for current page */}
@@ -619,7 +621,7 @@ export default function OnboardingScreen() {
                       who understands <Text style={styles.midInfoTitleAccent}>a lot.</Text>
                     </Text>
                     <Pressable
-                      style={styles.midInfoArrowButton}
+                      style={[styles.midInfoArrowButton, { bottom: insets.bottom > 0 ? insets.bottom + 16 : 24 }]}
                       onPress={handleContinue}
                       hitSlop={10}>
                       <MaterialIcons name="arrow-forward" size={24} color={COLORS.background} />
@@ -808,7 +810,7 @@ export default function OnboardingScreen() {
 
         {/* Footer */}
         {!isIntroPage && !questionIsInfo && (
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 24 }]}>
           <Pressable
             style={styles.backButton}
             onPress={handleBack}
@@ -951,9 +953,12 @@ const styles = StyleSheet.create({
     color: COLORS.background,
     fontWeight: '600',
   },
+  scrollView: {
+    flex: 1,
+  },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 24,
   },
   questionBlock: {
     marginBottom: 32,
@@ -1183,14 +1188,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 24,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,

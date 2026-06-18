@@ -1,13 +1,13 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
+import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -41,15 +41,24 @@ export default function SplashScreen() {
 
   const checkUserAndNavigate = async (userId?: string, email?: string) => {
     if (!userId) {
-      router.replace('/onboarding/welcome');
+      router.replace('/onboarding/login');
       return;
     }
 
-    let { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('user_id')
       .eq('user_id', userId)
       .maybeSingle();
+
+    if (profileError) {
+      console.error('[index checkUserAndNavigate] profile lookup error:', profileError);
+      await supabase.auth.signOut();
+      Alert.alert('Login Failed', 'Could not load your account. Please try again.', [
+        { text: 'OK', onPress: () => router.replace('/onboarding/login') },
+      ]);
+      return;
+    }
 
     if (!profile && email) {
       const { data: profileByEmail } = await supabase
@@ -57,14 +66,18 @@ export default function SplashScreen() {
         .select('user_id')
         .eq('email', email)
         .maybeSingle();
-      profile = profileByEmail;
+      if (profileByEmail) {
+        router.replace('/(tabs)');
+        return;
+      }
     }
 
     if (profile) {
       router.replace('/(tabs)');
     } else {
-      await supabase.auth.signOut();
-      alert('This email is not registered. Please sign up using your phone number first.');
+      // New Google user — send them to complete their profile
+      await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
+      router.replace('/onboarding/basic-details');
     }
   };
 
@@ -100,9 +113,10 @@ export default function SplashScreen() {
         }
       }
 
-      const redirectUrl = makeRedirectUri();
-      console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);
-      
+      await AsyncStorage.setItem('oauth_flow_action', 'login');
+      const redirectUrl = Linking.createURL('auth/callback');
+      console.log('[auth] Starting OAuth with redirect:', redirectUrl);
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -113,82 +127,26 @@ export default function SplashScreen() {
       if (error) throw error;
 
       if (data?.url) {
-        // Helper to process the OAuth callback URL
-        const processAuthUrl = async (url: string) => {
-          const parsed = Linking.parse(url);
-          let code = parsed.queryParams?.code;
-          
-          if (!code && url.includes('?')) {
-             const query = url.split('?')[1]?.split('#')[0] || '';
-             const pairs = query.split('&');
-             for (const pair of pairs) {
-               const [k, v] = pair.split('=');
-               if (k === 'code' && v) { code = decodeURIComponent(v); break; }
-             }
-          }
-
-          if (code) {
-             const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code as string);
-             if (sessionError) throw sessionError;
-             await checkUserAndNavigate(sessionData.session?.user?.id);
-          } else if (url.includes('#access_token')) {
-             const hash = url.split('#')[1] || '';
-             const pairs = hash.split('&');
-             let access_token: string | null = null;
-             let refresh_token: string | null = null;
-             for (const pair of pairs) {
-               const [k, v] = pair.split('=');
-               if (k === 'access_token' && v) access_token = decodeURIComponent(v);
-               if (k === 'refresh_token' && v) refresh_token = decodeURIComponent(v);
-             }
-             
-             if (access_token && refresh_token) {
-               const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
-               await checkUserAndNavigate(sessionData.session?.user?.id);
-             } else {
-               router.replace('/onboarding/welcome');
-             }
-          } else {
-            // Unhandled URL format, fallback to onboarding
-            router.replace('/onboarding/welcome');
-          }
-        };
-
         if (Platform.OS === 'android') {
-          // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
-          // and shows a permanent white screen. Use the default browser instead.
-          const linkingPromise = new Promise<string>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              sub.remove();
-              reject(new Error('Google sign-in timed out. Please try again.'));
-            }, 120_000);
-
-            const sub = Linking.addEventListener('url', ({ url }) => {
-              console.log(`[auth] Android deep link received:`, url);
-              if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
-                clearTimeout(timeout);
-                sub.remove();
-                resolve(url);
-              }
-            });
-          });
-
-          console.log(`[auth] Opening Google auth in default browser...`);
+          console.log('➡️ [auth] Android: Opening external browser via Linking.openURL...');
           await Linking.openURL(data.url);
-          const authUrl = await linkingPromise;
-          await processAuthUrl(authUrl);
         } else {
-          // iOS: openAuthSessionAsync works correctly with SFSafariViewController
           const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          console.log(`[auth] Browser result: ${result.type}`);
+          console.log('📱 [auth] Google OAuth browser session result:', result.type);
           if (result.type === 'success' && result.url) {
-            await processAuthUrl(result.url);
+            console.log('➡️ [auth] Redirect URL captured from browser, routing manually...');
+            const queryParams = result.url.split('?')[1] || '';
+            const hashParams = result.url.includes('#') ? `#${result.url.split('#')[1]}` : '';
+            router.replace(`/auth/callback?${queryParams}${hashParams}`);
           }
         }
       }
     } catch (err) {
+      await AsyncStorage.removeItem('oauth_flow_action').catch(() => {});
       console.error('Social login error:', err);
-      alert('Login failed. Please try again.');
+      Alert.alert('Login Failed', 'Please try again.', [
+        { text: 'OK', onPress: () => router.replace('/onboarding/login') },
+      ]);
     } finally {
       setIsLoggingIn(false);
     }
@@ -508,15 +466,15 @@ export default function SplashScreen() {
 }
 
 const COLORS = {
-  background: '#FFFFFF',
-  textPrimary: '#1B1528',
-  textSecondary: '#6B7280',
-  accent: '#4B0082',
-  accentLight: '#6A0DAD',
-  accentSoft: '#F3ECFF',
-  border: '#E5E7EB',
+  background: '#04020b',
+  textPrimary: '#EDE8FF',
+  textSecondary: '#A89BC2',
+  accent: '#A855F7',
+  accentLight: '#C084FC',
+  accentSoft: 'rgba(168,85,247,0.15)',
+  border: 'rgba(255,255,255,0.1)',
   success: '#10B981',
-  shadow: 'rgba(75, 0, 130, 0.1)',
+  shadow: 'rgba(168, 85, 247, 0.2)',
 };
 
 const styles = StyleSheet.create({
@@ -589,7 +547,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
   },
   checkmark: {
-    color: COLORS.background,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -706,7 +664,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   modalButtonText: {
-    color: COLORS.background,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },

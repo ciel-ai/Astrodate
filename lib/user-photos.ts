@@ -190,7 +190,7 @@ export const savePhotoMetadata = async (photo: Omit<UserPhoto, 'id' | 'created_a
 
     const { data, error } = await supabase
       .from('user_photos')
-      .insert(insertPayload)
+      .insert(insertPayload as any)
       .select()
       .single();
 

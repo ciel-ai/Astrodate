@@ -1457,6 +1457,7 @@ export const profileStyles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     flex: 1,
+    backgroundColor: 'transparent',
   },
   chipContainer: {
     flexDirection: 'row',
@@ -1511,6 +1512,10 @@ export const profileStyles = StyleSheet.create({
     color: '#E9D5FF',
     fontSize: 14,
     fontWeight: '700',
+    backgroundColor: 'transparent',
+  },
+  addButtonIcon: {
+    backgroundColor: 'transparent',
   },
   modalFooter: {
     flexDirection: 'row',

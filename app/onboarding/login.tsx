@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase';
 import { isValidPhoneNumber } from '@/utils/phone-utils';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { makeRedirectUri } from 'expo-auth-session';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -14,6 +13,7 @@ import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 WebBrowser.maybeCompleteAuthSession();
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -123,11 +123,22 @@ export default function LoginScreen() {
     }
 
     // Check 1 — profile matched by Supabase user_id (already linked or phone user)
-    const { data: profileByUserId } = await supabase
+    const { data: profileByUserId, error: profileByUserIdError } = await supabase
       .from('user_profiles')
       .select('user_id')
       .eq('user_id', userId)
       .maybeSingle();
+
+    if (profileByUserIdError) {
+      console.error('[checkUserAndNavigate] profile lookup error:', profileByUserIdError);
+      await supabase.auth.signOut();
+      showAlert(
+        'Login Failed',
+        'Could not load your account. Please try again.',
+        [{ text: 'OK', onPress: () => router.replace('/onboarding/login') }]
+      );
+      return;
+    }
 
     if (profileByUserId) {
       router.replace('/(tabs)');
@@ -137,11 +148,14 @@ export default function LoginScreen() {
     // Check 2 — profile matched by email (existing phone user, Apple not yet linked)
     let profileByEmail = null;
     if (email) {
-      const { data } = await supabase
+      const { data, error: profileByEmailError } = await supabase
         .from('user_profiles')
         .select('user_id')
         .eq('email', email)
         .maybeSingle();
+      if (profileByEmailError) {
+        console.error('[checkUserAndNavigate] email lookup error:', profileByEmailError);
+      }
       profileByEmail = data;
     }
 
@@ -150,7 +164,7 @@ export default function LoginScreen() {
       await supabase.auth.signOut();
       showAlert(
         'Account Not Linked',
-        'This Apple ID is not linked to any account. Log in with your phone number, then go to Settings → Linked Accounts to connect your Apple ID.',
+        'This social account is not linked to any AstroDate account. Log in with your phone number, then go to Settings → Linked Accounts to connect it.',
         [
           { text: 'Log in with Phone', onPress: () => router.replace('/onboarding/login') },
           { text: 'Cancel', style: 'cancel' },
@@ -161,7 +175,8 @@ export default function LoginScreen() {
 
     // Check 3 — no profile anywhere
     if (email) {
-      // Apple provided an email (first-ever sign-in) and no account exists → new user → onboard
+      // New user — no account exists yet → send to onboarding
+      await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
       router.replace({
         pathname: '/onboarding/basic-details',
         params: {
@@ -170,11 +185,11 @@ export default function LoginScreen() {
         },
       });
     } else {
-      // No email (Apple withholds it after first sign-in) and no profile → cannot identify user
+      // No email and no profile → cannot identify user
       await supabase.auth.signOut();
       showAlert(
         'Account Not Found',
-        'Could not find an account for this Apple ID. Please sign up with your phone number first.',
+        'Could not find an AstroDate account for this sign-in. Please sign up with your phone number first.',
         [
           { text: 'Sign Up', onPress: () => router.replace('/onboarding/signup') },
           { text: 'Cancel', style: 'cancel' },
@@ -225,6 +240,7 @@ export default function LoginScreen() {
         }
       }
 
+      await AsyncStorage.setItem('oauth_flow_action', 'login');
       const redirectUrl = Linking.createURL('auth/callback');
       console.log('🔗 [auth] Starting OAuth with redirect:', redirectUrl);
 
@@ -236,84 +252,31 @@ export default function LoginScreen() {
       });
 
       if (error) throw error;
-      if (!data?.url) return;
-
-      // Processes the callback URL once we have it (code or implicit token)
-      const processLoginUrl = async (url: string) => {
-        const parsed = Linking.parse(url);
-        let code = parsed.queryParams?.code as string | undefined;
-
-        if (!code && url.includes('?')) {
-          const query = url.split('?')[1]?.split('#')[0] || '';
-          for (const pair of query.split('&')) {
-            const [k, v] = pair.split('=');
-            if (k === 'code' && v) { code = decodeURIComponent(v); break; }
+      if (data?.url) {
+        if (Platform.OS === 'android') {
+          console.log('➡️ [auth] Android: Opening external browser via Linking.openURL...');
+          await Linking.openURL(data.url);
+        } else {
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          console.log('📱 [auth] Google OAuth browser session result:', result.type);
+          if (result.type === 'success' && result.url) {
+            console.log('➡️ [auth] Redirect URL captured from browser, routing manually...');
+            const queryParams = result.url.split('?')[1] || '';
+            const hashParams = result.url.includes('#') ? `#${result.url.split('#')[1]}` : '';
+            router.replace(`/auth/callback?${queryParams}${hashParams}`);
           }
-        }
-
-        if (code) {
-          const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-          if (sessionError) throw sessionError;
-          await checkUserAndNavigate(sessionData.session?.user?.id);
-          return;
-        }
-
-        if (url.includes('#access_token')) {
-          const hash = url.split('#')[1] || '';
-          let access_token: string | null = null;
-          let refresh_token: string | null = null;
-          for (const pair of hash.split('&')) {
-            const [k, v] = pair.split('=');
-            if (k === 'access_token' && v) access_token = decodeURIComponent(v);
-            if (k === 'refresh_token' && v) refresh_token = decodeURIComponent(v);
-          }
-          if (access_token && refresh_token) {
-            const { data: sessionData } = await supabase.auth.setSession({ access_token, refresh_token });
-            await checkUserAndNavigate(sessionData.session?.user?.id);
-          } else {
-            router.replace('/onboarding/welcome');
-          }
-          return;
-        }
-
-        router.replace('/onboarding/welcome');
-      };
-
-      if (Platform.OS === 'android') {
-        // Android: Chrome Custom Tab can't redirect to custom schemes (exp://, astrodate://)
-        // and shows a permanent white screen. Use the default browser instead.
-        const linkingPromise = new Promise<string>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            sub.remove();
-            reject(new Error('Google sign-in timed out. Please try again.'));
-          }, 120_000);
-
-          const sub = Linking.addEventListener('url', ({ url }) => {
-            console.log(`[auth] Android deep link received:`, url);
-            if (url.includes('code=') || url.includes('access_token') || url.includes('error=')) {
-              clearTimeout(timeout);
-              sub.remove();
-              resolve(url);
-            }
-          });
-        });
-
-        console.log(`[auth] Opening Google auth in default browser...`);
-        await Linking.openURL(data.url);
-        const authUrl = await linkingPromise;
-        await processLoginUrl(authUrl);
-      } else {
-        // iOS: openAuthSessionAsync works correctly with SFSafariViewController
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log(`[auth] Browser result: ${result.type}`);
-        if (result.type === 'success' && result.url) {
-          await processLoginUrl(result.url);
         }
       }
     } catch (err: any) {
+      await AsyncStorage.removeItem('oauth_flow_action').catch(() => {});
       if (err?.code === 'ERR_REQUEST_CANCELED') return; // user dismissed Apple sheet — silent
       console.warn('⚠️ Social login error:', err);
       showAlert('Login error', err?.message ?? 'Social login failed. Please try again.');
+      // On Android, Expo Router may have navigated to auth/callback before the error
+      // occurred. Navigate back to login so the user can retry.
+      if (Platform.OS === 'android') {
+        router.replace('/onboarding/login');
+      }
     } finally {
       if (isMountedRef.current) setIsLoggingIn(false);
     }
