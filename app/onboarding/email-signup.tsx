@@ -123,7 +123,6 @@ export default function EmailSignupScreen() {
     const redirectUrl = 'astrodate://auth/verify';
 
     console.log('📧 [email-signup] Starting signup', {
-      email: email.trim().toLowerCase(),
       redirectUrl,
     });
 

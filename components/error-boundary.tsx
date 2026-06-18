@@ -3,9 +3,8 @@
  *
  * Root React error boundary. Catches any unhandled render-phase errors
  * that bubble up from the component tree and:
- *   1. Reports them to Sentry with the component stack attached.
- *   2. Shows a friendly fallback UI.
- *   3. Offers a "Try Again" action that navigates back to the root
+ *   1. Shows a friendly fallback UI.
+ *   2. Offers a "Try Again" action that navigates back to the root
  *      route before clearing the error state, preventing the
  *      immediate re-throw that occurred when we just called setState.
  *
@@ -37,7 +36,7 @@ export class ErrorBoundary extends React.Component<
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error('[ErrorBoundary]', error, info);
-
+    // Crashes are automatically captured by Expo EAS
   }
 
   private handleTryAgain = () => {

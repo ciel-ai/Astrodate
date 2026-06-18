@@ -89,7 +89,7 @@ export default function EmailVerifyScreen() {
       }
       hasProcessedRef.current = true;
 
-      console.log('🔗 [auth/verify] Processing deep link:', url);
+      console.log('🔗 [auth/verify] Processing deep link');
 
       const result = await handleEmailVerificationDeepLink(url);
 

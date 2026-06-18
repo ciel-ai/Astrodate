@@ -1,3 +1,4 @@
+export { TabScreenFallback as ErrorBoundary } from '@/components/tab-screen-fallback';
 import { getStandouts, type Standout } from '@/lib/daily-picks';
 import { getMembershipOrFree } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';

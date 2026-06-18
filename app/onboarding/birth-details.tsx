@@ -1,7 +1,7 @@
 import { getAstroDetails, parseTzString } from '@/lib/astro';
 import { getTimezoneOffset } from '@/lib/astro-geo';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setSecureItem } from '@/lib/secure-storage';
 import * as Location from 'expo-location';
 import { router, useNavigation } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -450,9 +450,9 @@ export default function BirthDetailsScreen() {
           params.astro = encodeURIComponent(JSON.stringify(astroDetails));
         }
 
-        // Store birth details in AsyncStorage for later use (e.g., horoscope)
+        // Store birth details in SecureStore for later use (e.g., horoscope)
         try {
-          await AsyncStorage.setItem(
+          await setSecureItem(
             'userBirthDetails',
             JSON.stringify({
               dob: dateOfBirth.toISOString(),

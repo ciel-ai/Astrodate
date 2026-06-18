@@ -109,7 +109,7 @@ export default function EmailLoginScreen() {
 
     if (isMountedRef.current) setLoading(true);
 
-    console.log('🔑 [email-login] Attempting login', { email: email.trim().toLowerCase() });
+    console.log('🔑 [email-login] Attempting login');
 
     try {
       const result = await loginWithEmail(email, password);

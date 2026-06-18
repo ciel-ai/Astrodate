@@ -15,6 +15,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
     ActivityIndicator,
+    Linking,
     Platform,
     ScrollView,
     StyleSheet,
@@ -223,7 +224,12 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleCancelSubscription = () => {
+  const handleCancelSubscription = async () => {
+    if (Platform.OS === 'ios') {
+      await Linking.openURL('itms-apps://apps.apple.com/account/subscriptions');
+      return;
+    }
+
     showAlert(
       'Cancel Subscription',
       'Your premium access will end immediately. This cannot be undone.',
@@ -235,6 +241,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             setCancellingSubscription(true);
             try {
+              // Android only — Razorpay managed subscriptions
               const { error } = await supabase.rpc('cancel_my_subscription');
               if (error) throw error;
               await refetchMembership();

@@ -15,7 +15,7 @@ import { supabase } from './supabase';
  */
 export const checkPhoneNumberExists = async (phone: string): Promise<boolean> => {
   try {
-    console.log('🔍 Checking if phone number exists:', phone);
+    console.log('🔍 Checking if phone number exists');
 
     const { data, error } = await supabase
       .from('user_profiles')
@@ -46,7 +46,7 @@ export const checkPhoneNumberExists = async (phone: string): Promise<boolean> =>
  */
 export const generateSignupOTP = async (phone: string) => {
   try {
-    console.log('📱 Generating signup OTP for:', phone);
+    console.log('📱 Generating signup OTP');
 
     const { data, error } = await supabase.auth.signInWithOtp({
       phone,

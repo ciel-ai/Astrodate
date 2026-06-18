@@ -128,7 +128,7 @@ export default function EmailVerifyPendingScreen() {
     if (isMountedRef.current) setResendLoading(true);
 
     const redirectUrl = 'astrodate://auth/verify'; // explicit URL — makeRedirectUri generates triple-slash which Android rejects
-    console.log('📨 [verify-pending] Resending to:', email);
+    console.log('📨 [verify-pending] Resending verification email');
 
     const result = await resendVerificationEmail(email, redirectUrl);
 

@@ -1,7 +1,7 @@
 import { useAuthAlert } from '@/lib/auth-alert-context';
 import { saveUserProfile } from '@/lib/user-profile';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setSecureItem } from '@/lib/secure-storage';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -9,7 +9,6 @@ import { supabase, SUPABASE_URL } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import { makeRedirectUri } from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
@@ -243,8 +242,7 @@ export default function BasicDetailsScreen() {
 
     setIsSaving(true);
     try {
-      // Save to AsyncStorage for backward compatibility
-      await AsyncStorage.setItem(
+      await setSecureItem(
         'userBasicDetails',
         JSON.stringify({
           fullName: fullName.trim(),
@@ -385,7 +383,7 @@ export default function BasicDetailsScreen() {
         let foundEmail = credential.email;
         if (!foundEmail) {
           const { data: sessionData } = await supabase.auth.getSession();
-          foundEmail = sessionData?.session?.user?.email;
+          foundEmail = sessionData?.session?.user?.email ?? null;
         }
 
         if (foundEmail) {
@@ -439,7 +437,7 @@ export default function BasicDetailsScreen() {
         }
 
         if (linkedEmail && isMountedRef.current) {
-          console.log(`[auth] Got email:`, linkedEmail);
+          console.log(`[auth] Email linked successfully`);
           setEmail(linkedEmail);
           setErrors((prev) => ({ ...prev, email: '' }));
           setStepIndex((prev) => prev + 1);

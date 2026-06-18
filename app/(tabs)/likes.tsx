@@ -1,3 +1,4 @@
+export { TabScreenFallback as ErrorBoundary } from '@/components/tab-screen-fallback';
 import { fetchFinalMatches } from '@/lib/matching';
 import { getMembershipOrFree } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';

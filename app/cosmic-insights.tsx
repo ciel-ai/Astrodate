@@ -2,7 +2,7 @@ import { getAstroDetails } from '@/lib/astro-details';
 import { getDailyHoroscope, parseTzString } from '@/lib/astro';
 import { getActiveAstroEvents, type AstroEvent } from '@/lib/synastry';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureItem } from '@/lib/secure-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -52,10 +52,10 @@ export default function CosmicInsightsScreen() {
       const activeEvents = await getActiveAstroEvents();
       setEvents(activeEvents);
 
-      // Fetch horoscope — prefer AsyncStorage, fall back to DB astro_details
+      // Fetch horoscope — prefer SecureStore cache, fall back to DB astro_details
       let horoParams: Parameters<typeof getDailyHoroscope>[0] | null = null;
 
-      const stored = await AsyncStorage.getItem('userBirthDetails');
+      const stored = await getSecureItem('userBirthDetails');
       if (stored) {
         const bd = JSON.parse(stored);
         const dob = new Date(bd.dob);

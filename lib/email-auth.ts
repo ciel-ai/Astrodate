@@ -115,7 +115,7 @@ export async function signUpWithEmail(
   redirectUrl: string
 ): Promise<AuthResult> {
   const normalizedEmail = email.trim().toLowerCase();
-  console.log('📧 [email-auth] signUpWithEmail — start', { email: normalizedEmail });
+  console.log('📧 [email-auth] signUpWithEmail — start');
 
   try {
     const { data, error } = await supabase.auth.signUp({
@@ -169,7 +169,7 @@ export async function loginWithEmail(
   password: string
 ): Promise<AuthResult> {
   const normalizedEmail = email.trim().toLowerCase();
-  console.log('🔑 [email-auth] loginWithEmail — start', { email: normalizedEmail });
+  console.log('🔑 [email-auth] loginWithEmail — start');
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -190,7 +190,6 @@ export async function loginWithEmail(
 
     console.log('✅ [email-auth] login success', {
       userId: user.id,
-      email: user.email,
       emailConfirmedAt: user.email_confirmed_at,
     });
 
@@ -218,7 +217,7 @@ export async function resendVerificationEmail(
   redirectUrl: string
 ): Promise<AuthResult & { cooldownSeconds?: number }> {
   const normalizedEmail = email.trim().toLowerCase();
-  console.log('📨 [email-auth] resendVerificationEmail:', normalizedEmail);
+  console.log('📨 [email-auth] resendVerificationEmail');
 
   // Spam guard
   const lastSent = resendCooldowns.get(normalizedEmail) ?? 0;
@@ -248,7 +247,7 @@ export async function resendVerificationEmail(
     }
 
     resendCooldowns.set(normalizedEmail, Date.now());
-    console.log('✅ [email-auth] Verification email resent to:', normalizedEmail);
+    console.log('✅ [email-auth] Verification email resent');
     return { success: true };
   } catch (err: any) {
     const msg = err?.message ?? String(err);
@@ -265,7 +264,7 @@ export async function resendVerificationEmail(
  */
 export async function verifyEmailOtp(email: string, otp: string): Promise<AuthResult> {
   const normalizedEmail = email.trim().toLowerCase();
-  console.log('🔑 [email-auth] verifyEmailOtp — start', { email: normalizedEmail });
+  console.log('🔑 [email-auth] verifyEmailOtp — start');
 
   try {
     const { data, error } = await supabase.auth.verifyOtp({
@@ -302,7 +301,7 @@ export async function verifyEmailOtp(email: string, otp: string): Promise<AuthRe
 export async function handleEmailVerificationDeepLink(
   url: string
 ): Promise<AuthResult> {
-  console.log('🔗 [email-auth] handleEmailVerificationDeepLink:', url);
+  console.log('🔗 [email-auth] handleEmailVerificationDeepLink');
 
   try {
     // Parse both hash (#) and query (?) params
@@ -414,6 +413,6 @@ export async function getCurrentUser() {
 export async function isEmailVerified(): Promise<boolean> {
   const user = await getCurrentUser();
   const verified = !!user?.email_confirmed_at;
-  console.log('🔍 [email-auth] isEmailVerified:', verified, user?.email);
+  console.log('🔍 [email-auth] isEmailVerified:', verified);
   return verified;
 }

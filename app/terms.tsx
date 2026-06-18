@@ -28,7 +28,7 @@ By downloading, installing, or using the AstroDate mobile application, you confi
 
 If you do not agree to these Terms, you must immediately stop using AstroDate. We reserve the right to update these Terms at any time. Continued use after updates constitutes acceptance.
 
-Last updated: June 2025.`,
+Last updated: June 2026.`,
   },
   {
     id: 'eligibility',
@@ -295,7 +295,7 @@ export default function TermsOfServiceScreen() {
             </View>
             <View style={styles.heroBadge}>
               <MaterialIcons name="schedule" size={11} color="#9b72d4" />
-              <Text style={styles.heroBadgeText}>Updated June 2025</Text>
+              <Text style={styles.heroBadgeText}>Updated June 2026</Text>
             </View>
           </View>
         </View>

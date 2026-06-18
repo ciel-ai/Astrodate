@@ -1,3 +1,4 @@
+export { TabScreenFallback as ErrorBoundary } from '@/components/tab-screen-fallback';
 import { getLastMessagesBatch, getUnreadCountsBatch } from '@/lib/messages';
 import { releaseRealtimeChannel, releaseRealtimeChannelsByTopicPrefix, trackRealtimeChannel } from '@/lib/realtime-channels';
 import { getReportedUserIds } from '@/lib/reports';

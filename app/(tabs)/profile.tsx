@@ -1,3 +1,4 @@
+export { TabScreenFallback as ErrorBoundary } from '@/components/tab-screen-fallback';
 import React from 'react';
 import { useProfileData } from '@/hooks/useProfileData';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';

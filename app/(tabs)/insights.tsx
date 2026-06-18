@@ -1,6 +1,6 @@
 import { getDailyHoroscope, parseTzString } from '@/lib/astro';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureItem } from '@/lib/secure-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import LottieView from 'lottie-react-native';
@@ -34,8 +34,7 @@ export default function InsightsScreen() {
 
   const getBirthDetails = async (): Promise<BirthDetails | null> => {
     try {
-      // Try to get from AsyncStorage first
-      const stored = await AsyncStorage.getItem('userBirthDetails');
+      const stored = await getSecureItem('userBirthDetails');
       if (stored) {
         return JSON.parse(stored);
       }

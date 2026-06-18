@@ -46,9 +46,6 @@ export async function ensureRevenueCatConfigured() {
     throw new Error('RevenueCat iOS API key is missing.');
   }
 
-  const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');
-  await requestTrackingPermissionsAsync();
-  
   Purchases.configure({ apiKey: REVENUECAT_API_KEY_IOS });
   _rcConfigured = true;
 }
@@ -244,6 +241,17 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
           }
 
           await ensureRevenueCatConfigured();
+
+          // Bind the RevenueCat anonymous ID to our Supabase UID so the
+          // webhook's app_user_id matches auth.users.id in our DB.
+          if (options.userId) {
+            try {
+              await Purchases.logIn(options.userId);
+            } catch (loginErr) {
+              console.warn('[RC] logIn failed — purchase will proceed anonymously:', loginErr);
+            }
+          }
+
           const productId = REVENUECAT_PRODUCT_IDS[planSlug];
           const offerings = await Purchases.getOfferings();
           const allPackages = Object.values(offerings.all).flatMap((offering) => offering.availablePackages);
@@ -340,6 +348,10 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
   const restorePurchases = useCallback(async () => {
     if (Platform.OS === 'ios') {
       await ensureRevenueCatConfigured();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        try { await Purchases.logIn(user.id); } catch { /* non-fatal */ }
+      }
       const customerInfo = await Purchases.restorePurchases();
       const activeEntitlements = Object.keys(customerInfo.entitlements.active);
       if (activeEntitlements.length > 0) {
