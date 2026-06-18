@@ -52,7 +52,7 @@ VALUES (
   'monthly',
   true,
   '{
-    "daily_likes": -1,
+    "daily_likes": 30,
     "see_who_likes_you": 5,
     "advanced_filters": true,
     "dealbreakers": true,

@@ -147,10 +147,10 @@ export default function EmailSignupScreen() {
         return;
       }
 
-      console.log('✅ [email-signup] Account created, verification disabled, proceeding to onboarding');
+      console.log('✅ [email-signup] Account created — awaiting email verification');
 
-      // Navigate straight to the basic details onboarding screen
-      router.replace('/onboarding/basic-details');
+      // Send user to verify-pending so they confirm their email before onboarding
+      router.replace('/onboarding/email-verify-pending');
     } finally {
       isSubmittingRef.current = false;
       if (isMountedRef.current) setLoading(false);

@@ -54,9 +54,17 @@ yarn.lock
 package-lock.json
 
 -e 
-# Debug scripts
+# Debug scripts and local test files
 test-db*.js
+test_*.js
+fix_errors.js
 tmp_*.ts
 tmp_*.js
+logs.txt
+*_refs*.txt
+generate-apple-jwt.js
+# Android debug keystore (never commit signing keys)
+android/app/debug.keystore
+*.keystore
 # Supabase local temp files (exposes project ref + DB metadata)
 supabase/.temp/

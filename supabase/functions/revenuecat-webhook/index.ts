@@ -158,10 +158,10 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("RevenueCat webhook error:", err);
-    // Always return 200 to RevenueCat so it doesn't keep retrying for
-    // non-transient errors. Log the error for investigation instead.
+    // Return 200 so RevenueCat does not retry — retries on non-transient errors
+    // would cause duplicate subscription activations. Investigate via logs.
     return new Response(JSON.stringify({ error: "Internal error", detail: String(err) }), {
-      status: 500,
+      status: 200,
       headers: { "Content-Type": "application/json" },
     });
   }

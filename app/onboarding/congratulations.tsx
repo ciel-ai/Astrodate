@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import {
     Animated,
     Image,
+    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -59,7 +60,15 @@ export default function CongratulationsScreen() {
     }, 200);
   }, []);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    // Request ATT here — after onboarding context makes the reason clear to the user.
+    // Apple requires a pre-prompt before the system dialog on iOS 14.5+.
+    if (Platform.OS === 'ios') {
+      try {
+        const { requestTrackingPermissionsAsync } = await import('expo-tracking-transparency');
+        await requestTrackingPermissionsAsync();
+      } catch (_) {}
+    }
     router.replace('/(tabs)');
   };
 

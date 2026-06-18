@@ -22,7 +22,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+
   Linking,
   Platform,
   ScrollView,
@@ -69,7 +69,7 @@ const PLANS: PlanDef[] = [
     badgeColor: '#7C3AED',
     popular: true,
     features: [
-      { label: 'Unlimited likes',                          included: true, highlight: true },
+      { label: '30 likes per day',                          included: true, highlight: true },
       { label: 'See 5 profiles who liked you',             included: true, highlight: true },
       { label: 'Advanced filters & dealbreakers',          included: true, highlight: true },
       { label: '3 Stars (super-likes) per week',           included: true },
@@ -138,6 +138,7 @@ export default function SubscriptionScreen() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [userId, setUserId]           = useState<string | null>(null);
   const [userEmail, setUserEmail]     = useState<string | undefined>(undefined);
+  const [restoreMsg, setRestoreMsg]   = useState<string | null>(null);
 
   // Auth
   useEffect(() => {
@@ -359,17 +360,19 @@ export default function SubscriptionScreen() {
               </Text>
               <TouchableOpacity
                 onPress={async () => {
+                  setRestoreMsg(null);
                   const ok = await restorePurchases();
-                  if (ok) {
-                    Alert.alert('Restored', 'Your purchases have been restored.');
-                  } else {
-                    Alert.alert('Nothing to Restore', 'No previous purchases were found for this Apple ID.');
-                  }
+                  setRestoreMsg(ok ? '✓ Purchases restored.' : 'No previous purchases found for this Apple ID.');
                 }}
                 style={styles.restoreButton}
               >
                 <Text style={styles.footerLink}>Restore Purchases</Text>
               </TouchableOpacity>
+              {restoreMsg ? (
+                <Text style={[styles.footerText, { color: restoreMsg.startsWith('✓') ? '#10B981' : 'rgba(255,255,255,0.5)' }]}>
+                  {restoreMsg}
+                </Text>
+              ) : null}
               <TouchableOpacity onPress={() => Linking.openURL('itms-apps://apps.apple.com/account/subscriptions')}>
                 <Text style={styles.footerLink}>Manage subscription in iOS Settings ↗</Text>
               </TouchableOpacity>
@@ -379,7 +382,7 @@ export default function SubscriptionScreen() {
               Payments secured by Razorpay. Cancel anytime from Settings → Subscription.
             </Text>
           )}
-          <TouchableOpacity onPress={() => Linking.openURL('https://astrodate.in/terms')}>
+          <TouchableOpacity onPress={() => router.push('/terms')}>
             <Text style={styles.footerLink}>Terms of Service</Text>
           </TouchableOpacity>
         </View>

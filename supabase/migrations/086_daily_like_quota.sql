@@ -1,6 +1,6 @@
 -- Migration 085: Daily like quota enforcement.
 --
--- The plan_catalog already seeds daily_likes: Free=10, Astro+/AstroX=-1 (unlimited).
+-- The plan_catalog seeds daily_likes: Free=10, Astro+=30, AstroX=-1 (unlimited).
 -- This migration wires the enforcement layer: a quota table + atomic consume_like()
 -- function that the client calls before saving a regular like.
 
