@@ -1,10 +1,8 @@
 name: Deploy
 
+# Runs ONLY when you start it manually (Actions tab → Deploy → "Run workflow").
+# Pushing to main no longer triggers a build, so you never pay for an unintended one.
 on:
-  push:
-    branches:
-      - main
-      - master
   workflow_dispatch:
     inputs:
       platform:
@@ -16,6 +14,14 @@ on:
           - all
           - android
           - ios
+      submit_android:
+        description: Submit Android to Play Store?
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
       submit_ios:
         description: Submit iOS to App Store?
         required: true
@@ -48,27 +54,25 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Build Android — AAB auto-submitted below when GOOGLE_SERVICE_ACCOUNT_JSON is set
+      # Build Android — AAB auto-submitted below when submit_android is true and the secret is set
       - name: Build Android (production)
-        if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android' || github.event_name == 'push' }}
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'android' }}
         run: eas build --platform android --profile production --non-interactive
 
       # Build iOS
       - name: Build iOS (production)
-        if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' || github.event_name == 'push' }}
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'ios' }}
         run: eas build --platform ios --profile production --non-interactive
 
       # Submit iOS to App Store
       - name: Submit iOS to App Store
-        if: |
-          (github.event.inputs.submit_ios != 'false') &&
-          (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' || github.event_name == 'push')
+        if: ${{ inputs.submit_ios != 'false' && (inputs.platform == 'all' || inputs.platform == 'ios') }}
         run: eas submit --platform ios --profile production --latest --non-interactive
 
       # Write the Google service account key from the secret (gracefully skips submit if not set)
       - name: Prepare Android credentials
         id: android_creds
-        if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android' || github.event_name == 'push' }}
+        if: ${{ inputs.submit_android != 'false' && (inputs.platform == 'all' || inputs.platform == 'android') }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
