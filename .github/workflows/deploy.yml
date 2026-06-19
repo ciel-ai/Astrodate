@@ -48,7 +48,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Build Android — AAB stored on EAS dashboard, download manually to upload to Play Store
+      # Build Android — AAB auto-submitted below when GOOGLE_SERVICE_ACCOUNT_JSON is set
       - name: Build Android (production)
         if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android' || github.event_name == 'push' }}
         run: eas build --platform android --profile production --non-interactive
@@ -64,3 +64,23 @@ jobs:
           (github.event.inputs.submit_ios != 'false') &&
           (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios' || github.event_name == 'push')
         run: eas submit --platform ios --profile production --latest --non-interactive
+
+      # Write the Google service account key from the secret (gracefully skips submit if not set)
+      - name: Prepare Android credentials
+        id: android_creds
+        if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android' || github.event_name == 'push' }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GOOGLE_SERVICE_ACCOUNT_JSON secret not set — skipping Android submit. The AAB is still available on the EAS dashboard."
+          fi
+
+      # Submit Android to Play Store
+      - name: Submit Android to Play Store
+        if: ${{ steps.android_creds.outputs.has_creds == 'true' }}
+        run: eas submit --platform android --profile production --latest --non-interactive

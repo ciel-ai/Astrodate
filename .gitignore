@@ -13,6 +13,9 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
+
+# Google Play service account key (never commit — provided via CI secret)
+google-service-account.json
 *.p8
 *.p12
 *.key
