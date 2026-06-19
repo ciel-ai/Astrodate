@@ -114,7 +114,8 @@
             "targetSdkVersion": 35
           },
           "ios": {
-            "privacyManifestAggregationEnabled": true
+            "privacyManifestAggregationEnabled": true,
+            "deploymentTarget": "15.1"
           }
         }
       ],
@@ -162,7 +163,8 @@
       ],
       "expo-apple-authentication",
       "expo-secure-store",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "./plugins/with-modular-headers"
     ],
     "experiments": {
       "typedRoutes": true,

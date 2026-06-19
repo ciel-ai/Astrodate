@@ -3,7 +3,8 @@ import { getSection1Responses, saveSection1Responses } from '@/lib/onboarding-re
 import { getMembershipOrFree, getPlanCatalog, type MembershipSummary } from '@/lib/subscription';
 import { supabase } from '@/lib/supabase';
 import { useSubscriptionPayment } from '@/lib/useSubscriptionPayment';
-import { deleteUserPhoto, getUserPhotos } from '@/lib/user-photos';
+import { deleteUserPhoto, getUserPhotos, setPrimaryPhoto, uploadUserPhotos } from '@/lib/user-photos';
+import * as ImagePicker from 'expo-image-picker';
 import { getUserProfile, saveUserProfile } from '@/lib/user-profile';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -107,7 +108,9 @@ export interface ProfileData {
   onRefresh: () => Promise<void>;
   handleSave: () => Promise<void>;
   handleGetLocation: () => Promise<void>;
+  handleAddPhotos: () => Promise<void>;
   handleRemovePhoto: (id: string) => Promise<void>;
+  handleSetMainPhoto: (id: string) => Promise<void>;
   handleSubscribe: (planId: string, planName: string, amountPaise: number) => Promise<void>;
   handleAddInterest: (v: string) => void;
   handleRemoveInterest: (v: string) => void;
@@ -607,10 +610,81 @@ export function useProfileData(): ProfileData {
   const handleRemovePhoto = async (photoId: string) => {
     try {
       if (isMountedRef.current) setLoading(true);
+
+      // If we're removing the primary photo, auto-promote the next one first
+      const photoToRemove = userPhotos.find(p => p.id === photoId);
+      const isPrimaryBeingRemoved = photoToRemove?.is_primary ?? false;
+
       const result = await deleteUserPhoto(photoId);
       if (!isMountedRef.current) return;
       if (!result.success) {
         showAlert('Error', result.error || 'Failed to remove photo');
+        return;
+      }
+
+      if (isPrimaryBeingRemoved) {
+        const remaining = userPhotos.filter(p => p.id !== photoId);
+        if (remaining.length > 0) {
+          await setPrimaryPhoto(remaining[0].id);
+        }
+      }
+
+      await fetchUserData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isMountedRef.current) showAlert('Error', message);
+    } finally {
+      if (isMountedRef.current) setLoading(false);
+    }
+  };
+
+  const handleAddPhotos = async () => {
+    try {
+      const remaining = 6 - userPhotos.length;
+      if (remaining <= 0) {
+        showAlert('Limit Reached', 'You can have at most 6 photos. Remove one first.');
+        return;
+      }
+
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        quality: 0.8,
+      });
+
+      if (pickerResult.canceled || pickerResult.assets.length === 0) return;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      if (isMountedRef.current) setLoading(true);
+
+      const uris = pickerResult.assets.map(a => a.uri);
+      const result = await uploadUserPhotos(uris, user.id);
+      if (!isMountedRef.current) return;
+
+      if (!result.success) {
+        showAlert('Error', result.error || 'Failed to upload photos');
+        return;
+      }
+
+      await fetchUserData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (isMountedRef.current) showAlert('Error', message);
+    } finally {
+      if (isMountedRef.current) setLoading(false);
+    }
+  };
+
+  const handleSetMainPhoto = async (photoId: string) => {
+    try {
+      if (isMountedRef.current) setLoading(true);
+      const result = await setPrimaryPhoto(photoId);
+      if (!isMountedRef.current) return;
+      if (!result.success) {
+        showAlert('Error', result.error || 'Failed to set main photo');
         return;
       }
       await fetchUserData();
@@ -730,7 +804,9 @@ export function useProfileData(): ProfileData {
     onRefresh,
     handleSave,
     handleGetLocation,
+    handleAddPhotos,
     handleRemovePhoto,
+    handleSetMainPhoto,
     handleSubscribe,
     handleAddInterest,
     handleRemoveInterest,

@@ -50,8 +50,10 @@ export default function DeleteAccountScreen() {
             }
             await deleteSecureItem('userBasicDetails').catch(() => {});
             await deleteSecureItem('userBirthDetails').catch(() => {});
-            await supabase.auth.signOut();
-            // Auth listener will handle redirection
+            await supabase.auth.signOut().catch((signOutErr) => {
+              console.warn('[DeleteAccount] signOut error (non-fatal):', signOutErr);
+            });
+            router.replace('/onboarding/welcome');
           } catch (err: any) {
             console.error('Delete account error full:', err);
             showAlert('Error', err.message || 'Failed to delete account. Please try again later.');

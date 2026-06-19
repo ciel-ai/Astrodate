@@ -319,7 +319,7 @@ export function useFeedActions({
     await checkMutualLike(chatUserId);
 
     router.push({
-      pathname: '/chat/[id]/index' as any,
+      pathname: '/chat/[id]' as any,
       params: { id: chatUserId },
     });
   }, [matchedProfile, matchedUserId, router, setShowMatchModal, setMatchedProfile, setMatchedUserId, setMatchIcebreaker, setMatchAstroScore, setMatchId]);

@@ -255,18 +255,19 @@ export const uploadUserPhotos = async (
       };
     }
 
-    const currentMaxDisplayOrder = existingPhotos.reduce((max, photo) => {
-      const order = Number(photo.display_order);
-      return Number.isFinite(order) ? Math.max(max, order) : max;
-    }, -1);
-    const startDisplayOrder = currentMaxDisplayOrder + 1;
+    // Find free display_order slots (constraint: 0..5)
+    const usedOrders = new Set(existingPhotos.map(p => Number(p.display_order)));
+    const freeSlots: number[] = [];
+    for (let slot = 0; slot < MAX_PHOTOS_PER_USER; slot++) {
+      if (!usedOrders.has(slot)) freeSlots.push(slot);
+    }
 
     const hasPrimaryPhoto = existingPhotos.some((photo) => photo.is_primary);
 
     // Upload photos sequentially to avoid overwhelming the storage
     for (let i = 0; i < photosToUpload.length; i++) {
       const imageUri = photosToUpload[i];
-      const displayOrder = startDisplayOrder + i;
+      const displayOrder = freeSlots[i] ?? i;
       const isPrimary = !hasPrimaryPhoto && i === 0;
 
       // Upload to storage
@@ -360,6 +361,32 @@ export const getUserPhotos = async (userId?: string) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('❌ Exception fetching photos:', errorMessage);
     return { success: false, error: errorMessage };
+  }
+};
+
+/**
+ * Sets a photo as the primary photo for the current user
+ */
+export const setPrimaryPhoto = async (photoId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return { success: false, error: 'User not authenticated' };
+
+    const { error: clearError } = await supabase
+      .from('user_photos')
+      .update({ is_primary: false })
+      .eq('user_id', user.id);
+    if (clearError) return { success: false, error: clearError.message };
+
+    const { error: setError } = await supabase
+      .from('user_photos')
+      .update({ is_primary: true })
+      .eq('id', photoId);
+    if (setError) return { success: false, error: setError.message };
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 };
 

@@ -356,7 +356,7 @@ export default function SubscriptionScreen() {
           {Platform.OS === 'ios' ? (
             <>
               <Text style={styles.footerText}>
-                Subscriptions managed by Apple. Cancel anytime in iOS Settings → [Your Name] → Subscriptions.
+                Payment will be charged to your Apple ID account at confirmation of purchase. Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period. You can manage or cancel your subscription in iOS Settings → [Your Name] → Subscriptions.
               </Text>
               <TouchableOpacity
                 onPress={async () => {
@@ -382,9 +382,15 @@ export default function SubscriptionScreen() {
               Payments secured by Razorpay. Cancel anytime from Settings → Subscription.
             </Text>
           )}
-          <TouchableOpacity onPress={() => router.push('/terms')}>
-            <Text style={styles.footerLink}>Terms of Service</Text>
-          </TouchableOpacity>
+          <View style={styles.footerLinks}>
+            <TouchableOpacity onPress={() => router.push('/terms')}>
+              <Text style={styles.footerLink}>Terms of Service</Text>
+            </TouchableOpacity>
+            <Text style={styles.footerLinkSep}>·</Text>
+            <TouchableOpacity onPress={() => router.push('/privacy')}>
+              <Text style={styles.footerLink}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -673,5 +679,14 @@ const styles = StyleSheet.create({
   },
   restoreButton: {
     marginTop: 4,
+  },
+  footerLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  footerLinkSep: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 12,
   },
 });
