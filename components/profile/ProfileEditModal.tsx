@@ -4,7 +4,6 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
 
 import { profileStyles as styles } from './profileStyles';
 import { PickerSheet } from './PickerSheet';
@@ -42,11 +41,9 @@ const lookingForOptions = [
 ];
 
 export function ProfileEditModal({ data }: { data: ProfileData }) {
-  const router = useRouter();
-
   const {
     showEditModal, setShowEditModal,
-    userPhotos, handleRemovePhoto,
+    userPhotos, handleAddPhotos, handleRemovePhoto, handleSetMainPhoto,
     editedProfile, setEditedProfile,
     locationLoading, handleGetLocation,
     vedicSign,
@@ -86,36 +83,40 @@ export function ProfileEditModal({ data }: { data: ProfileData }) {
             {/* Photos Section */}
             <View style={styles.modalSection}>
               <Text style={styles.modalLabel}>Photos</Text>
-              <Text style={styles.modalHint}>Add or remove photos (tap to remove)</Text>
+              <Text style={styles.modalHint}>Tap photo to set as main · tap × to remove</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoGallery}>
-                {userPhotos.map((photo, index) => (
+                {userPhotos.map((photo) => (
                   <View key={photo.id} style={styles.photoItem}>
-                    <Image
-                      source={{ uri: photo.photo_url }}
-                      style={styles.photoThumbnail}
-                      contentFit="cover"
-                    />
-                    {index !== 0 && (
-                      <TouchableOpacity
-                        style={styles.removePhotoButton}
-                        onPress={() => handleRemovePhoto(photo.id)}>
-                        <MaterialIcons name="close" size={18} color="#FFFFFF" />
-                      </TouchableOpacity>
-                    )}
-                    {index === 0 && (
+                    <TouchableOpacity
+                      activeOpacity={photo.is_primary ? 1 : 0.75}
+                      onPress={() => !photo.is_primary && handleSetMainPhoto(photo.id)}>
+                      <Image
+                        source={{ uri: photo.photo_url }}
+                        style={styles.photoThumbnail}
+                        contentFit="cover"
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.removePhotoButton}
+                      onPress={() => handleRemovePhoto(photo.id)}>
+                      <MaterialIcons name="close" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    {photo.is_primary && (
                       <View style={styles.mainPhotoBadge}>
                         <Text style={styles.mainPhotoBadgeText}>Main</Text>
                       </View>
                     )}
                   </View>
                 ))}
-                <TouchableOpacity
-                  style={styles.addPhotoItem}
-                  activeOpacity={0.7}
-                  onPress={() => router.push('/onboarding/photo_upload')}>
-                  <MaterialIcons name="add-circle-outline" size={40} color="#7C3AED" />
-                  <Text style={styles.addPhotoText}>Add Photo</Text>
-                </TouchableOpacity>
+                {userPhotos.length < 6 && (
+                  <TouchableOpacity
+                    style={styles.addPhotoItem}
+                    activeOpacity={0.7}
+                    onPress={handleAddPhotos}>
+                    <MaterialIcons name="add-circle-outline" size={40} color="#7C3AED" />
+                    <Text style={styles.addPhotoText}>Add Photo</Text>
+                  </TouchableOpacity>
+                )}
               </ScrollView>
             </View>
 

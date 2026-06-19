@@ -118,11 +118,46 @@ Deno.serve(async (req: Request) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      console.log("[link-apple-identity] Conflict: Apple ID linked to different user");
-      return new Response(
-        JSON.stringify({ error: "This Apple ID is already linked to a different account" }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      // Apple sub is linked to a different user — check if it's a ghost (no user_profiles row).
+      // This happens when a user tapped "Continue with Apple" on the login screen (creating a
+      // temporary Supabase user), then backed out and signed up with phone instead.
+      const { data: existingProfile, error: profileCheckError } = await adminClient
+        .from("user_profiles")
+        .select("user_id")
+        .eq("user_id", existingUserId)
+        .maybeSingle();
+
+      if (profileCheckError) {
+        console.error("[link-apple-identity] Profile check error:", profileCheckError.message);
+        return new Response(
+          JSON.stringify({ error: "Internal server error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (existingProfile) {
+        // The existing identity belongs to a real account — genuine conflict
+        console.log("[link-apple-identity] Conflict: Apple ID linked to a real account");
+        return new Response(
+          JSON.stringify({ error: "This Apple ID is already linked to a different account" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Ghost user (Apple sub exists in auth.identities but the user has no profile).
+      // Delete the ghost user — this cascades to remove the identity row.
+      console.log("[link-apple-identity] Ghost user detected, deleting:", existingUserId);
+      const { error: deleteGhostError } = await adminClient.auth.admin.deleteUser(existingUserId);
+      if (deleteGhostError) {
+        console.error("[link-apple-identity] Failed to delete ghost user:", deleteGhostError.message);
+        return new Response(
+          JSON.stringify({ error: "Failed to resolve identity conflict" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      console.log("[link-apple-identity] Ghost user deleted, proceeding with link");
+      // Fall through to insert the new identity below
     }
 
     // 5. Insert the Apple identity linked to the current phone user
