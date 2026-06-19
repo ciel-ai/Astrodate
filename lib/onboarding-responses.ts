@@ -85,6 +85,31 @@ export const saveSection1Responses = async (responses: Section1Responses) => {
       };
     }
 
+    // Sync onboarding interest array to user_preferences.gender_preference
+    if (responses.interest !== undefined) {
+      let genderPref = 'Everyone';
+      const interestList = responses.interest || [];
+      if (interestList.includes('everyone')) {
+        genderPref = 'Everyone';
+      } else if (interestList.length === 1) {
+        if (interestList[0] === 'women') genderPref = 'Female';
+        else if (interestList[0] === 'men') genderPref = 'Male';
+        else if (interestList[0] === 'beyond-binary') genderPref = 'Non-binary';
+      } else if (interestList.length > 1) {
+        genderPref = 'Everyone';
+      }
+
+      const { error: prefError } = await supabase.from('user_preferences').upsert({
+        user_id: userId,
+        gender_preference: genderPref,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      
+      if (prefError) {
+        console.error('❌ Error updating user_preferences gender_preference:', prefError);
+      }
+    }
+
     console.warn('✅ Section 1 responses saved successfully');
     return {
       success: true,
