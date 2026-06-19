@@ -17,6 +17,10 @@ expo-env.d.ts
 # Google Play service account key (never commit — provided via CI secret)
 google-service-account.json
 *.p8
+# Safety net for stray Google/Firebase service-account keys
+*-firebase-adminsdk-*.json
+*.iam.gserviceaccount.com.json
+fixit-ed0d4-*.json
 *.p12
 *.key
 *.mobileprovision
