@@ -60,6 +60,10 @@
   },
   "submit": {
     "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "production"
+      },
       "ios": {
         "appleId": "ceo@cielinfitech.com",
         "ascAppId": "6767168818",

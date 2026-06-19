@@ -1,0 +1,90 @@
+name: Deploy
+
+# Runs ONLY when you start it manually (Actions tab → Deploy → "Run workflow").
+# Pushing to main no longer triggers a build, so you never pay for an unintended one.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+      submit_android:
+        description: Submit Android to Play Store?
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      submit_ios:
+        description: Submit iOS to App Store?
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  build-and-deploy:
+    name: EAS Build & Submit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm install
+
+      # Build Android — AAB auto-submitted below when submit_android is true and the secret is set
+      - name: Build Android (production)
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'android' }}
+        run: eas build --platform android --profile production --non-interactive
+
+      # Build iOS
+      - name: Build iOS (production)
+        if: ${{ inputs.platform == 'all' || inputs.platform == 'ios' }}
+        run: eas build --platform ios --profile production --non-interactive
+
+      # Submit iOS to App Store
+      - name: Submit iOS to App Store
+        if: ${{ inputs.submit_ios != 'false' && (inputs.platform == 'all' || inputs.platform == 'ios') }}
+        run: eas submit --platform ios --profile production --latest --non-interactive
+
+      # Write the Google service account key from the secret (gracefully skips submit if not set)
+      - name: Prepare Android credentials
+        id: android_creds
+        if: ${{ inputs.submit_android != 'false' && (inputs.platform == 'all' || inputs.platform == 'android') }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+            echo "has_creds=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_creds=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GOOGLE_SERVICE_ACCOUNT_JSON secret not set — skipping Android submit. The AAB is still available on the EAS dashboard."
+          fi
+
+      # Submit Android to Play Store
+      - name: Submit Android to Play Store
+        if: ${{ steps.android_creds.outputs.has_creds == 'true' }}
+        run: eas submit --platform android --profile production --latest --non-interactive

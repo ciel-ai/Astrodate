@@ -54,7 +54,7 @@
     },
     "android": {
       "versionCode": 2,
-      "package": "com.ciel.astrod8",
+      "package": "com.astrodate.app",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -101,6 +101,7 @@
       "favicon": "./assets/images/favicon-v2.png"
     },
     "plugins": [
+      "./plugins/withDisableAaptCruncher",
       "expo-router",
       [
         "expo-build-properties",
