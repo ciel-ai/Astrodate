@@ -8,11 +8,12 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "$EXPO_PUBLIC_RAZORPAY_KEY_ID_TEST",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ykgbfrpkumlnogjdgqgb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c4jMZioQMqyhnh8tDdnYNA_KI8eW5_q",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SiTtvf6OylKEiG",
         "EXPO_PUBLIC_EMAIL_REDIRECT_URL": "astrodate://auth/verify",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "$EXPO_PUBLIC_REVENUECAT_API_KEY_IOS"
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_SdPkBGhHxnTezAbmqTpdjWAVUiR",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "917840332542-fu0u2rh4fcm9jtjuuvm07c8otl7sk4g5.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -22,11 +23,12 @@
         "resourceClass": "m-medium"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "$EXPO_PUBLIC_RAZORPAY_KEY_ID_TEST",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ykgbfrpkumlnogjdgqgb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c4jMZioQMqyhnh8tDdnYNA_KI8eW5_q",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SiTtvf6OylKEiG",
         "EXPO_PUBLIC_EMAIL_REDIRECT_URL": "astrodate://auth/verify",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "$EXPO_PUBLIC_REVENUECAT_API_KEY_IOS"
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_SdPkBGhHxnTezAbmqTpdjWAVUiR",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "917840332542-fu0u2rh4fcm9jtjuuvm07c8otl7sk4g5.apps.googleusercontent.com"
       }
     },
     "apk": {
@@ -34,10 +36,12 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "$EXPO_PUBLIC_RAZORPAY_KEY_ID_TEST",
-        "EXPO_PUBLIC_EMAIL_REDIRECT_URL": "astrodate://auth/verify"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ykgbfrpkumlnogjdgqgb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c4jMZioQMqyhnh8tDdnYNA_KI8eW5_q",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SiTtvf6OylKEiG",
+        "EXPO_PUBLIC_EMAIL_REDIRECT_URL": "astrodate://auth/verify",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_SdPkBGhHxnTezAbmqTpdjWAVUiR",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "917840332542-fu0u2rh4fcm9jtjuuvm07c8otl7sk4g5.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -50,11 +54,12 @@
         "distribution": "store"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "$EXPO_PUBLIC_RAZORPAY_KEY_ID_LIVE",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ykgbfrpkumlnogjdgqgb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_c4jMZioQMqyhnh8tDdnYNA_KI8eW5_q",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_SiTtvf6OylKEiG",
         "EXPO_PUBLIC_EMAIL_REDIRECT_URL": "astrodate://auth/verify",
-        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "$EXPO_PUBLIC_REVENUECAT_API_KEY_IOS"
+        "EXPO_PUBLIC_REVENUECAT_API_KEY_IOS": "appl_SdPkBGhHxnTezAbmqTpdjWAVUiR",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "917840332542-fu0u2rh4fcm9jtjuuvm07c8otl7sk4g5.apps.googleusercontent.com"
       }
     }
   },
