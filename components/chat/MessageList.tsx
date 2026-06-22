@@ -192,7 +192,7 @@ export const MessageList = forwardRef<MessageListRef, MessageListProps>((
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#130820' },
-  contentContainer: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 6, backgroundColor: '#130820' },
+  contentContainer: { paddingHorizontal: 12, paddingTop: 32, paddingBottom: 6, backgroundColor: '#130820' },
   messageItem: { marginBottom: 8 },
   seenText: {
     fontSize: 11,
