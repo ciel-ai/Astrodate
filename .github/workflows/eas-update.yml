@@ -1,0 +1,45 @@
+name: EAS Update (OTA)
+
+# Publishes a JS/asset over-the-air update — no native build, no store submission.
+# Runs only when you start it (Actions tab → "EAS Update (OTA)" → Run workflow).
+# Only installed apps built with a MATCHING runtimeVersion + channel receive it.
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Update branch to publish to
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - preview
+      message:
+        description: Short description of this update
+        required: true
+        default: OTA update
+
+jobs:
+  publish-update:
+    name: Publish EAS Update
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Publish OTA update
+        run: eas update --branch ${{ inputs.branch }} --message "${{ inputs.message }}" --non-interactive

@@ -7,6 +7,15 @@
     "icon": "./assets/images/logo-v2.png",
     "scheme": "astrodate",
     "userInterfaceStyle": "dark",
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/0316ec04-75d5-4ab8-ab58-ac9f33069d28",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "ios": {
       "usesAppleSignIn": true,
       "buildNumber": "2",
