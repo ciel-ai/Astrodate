@@ -66,7 +66,7 @@ const ProfileHero = memo(function ProfileHero({
           style={styles.matchPill}
         >
           <Ionicons name="sparkles" size={14} color="#FFFFFF" />
-          <Text style={styles.matchPillText}>{compatibility}% Cosmic Match</Text>
+          <Text style={styles.matchPillText}>{Math.round(compatibility ?? 0)}% Cosmic Match</Text>
         </LinearGradient>
       </View>
 

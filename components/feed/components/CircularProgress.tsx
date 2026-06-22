@@ -133,7 +133,7 @@ export const CircularProgress = ({
             backgroundColor: innerBackgroundColor,
           }
         ]}>
-          <Text style={[circularStyles.percentageText, { color: textColor }]}>{progress}%</Text>
+          <Text style={[circularStyles.percentageText, { color: textColor }]}>{Math.round(progress)}%</Text>
           {subLabel ? (
             <Text style={{ fontSize: 8, fontWeight: 'bold', color: textColor, opacity: 0.6, marginTop: 2 }}>
               {subLabel}
