@@ -10,8 +10,9 @@ export const blockUser = async (
   blockedUserId: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const rpc = supabase.rpc as unknown as (name: string, params?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>;
-    const { error } = await rpc('block_user', {
+    // Call .rpc as a method on `supabase` so its internal `this` is preserved.
+    // (Extracting it into a variable detaches `this` → "Cannot read property 'rest' of undefined".)
+    const { error } = await (supabase as any).rpc('block_user', {
       p_blocked_id: blockedUserId,
     });
 
@@ -36,8 +37,7 @@ export const blockUser = async (
  */
 export const getBlockedUserIds = async (): Promise<{ success: boolean; data?: string[]; error?: string }> => {
   try {
-    const rpc = supabase.rpc as unknown as (name: string, params?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>;
-    const { data, error } = await rpc('get_blocked_user_ids');
+    const { data, error } = await (supabase as any).rpc('get_blocked_user_ids');
 
     if (error) {
       console.error('❌ Error fetching blocked users:', error);
