@@ -13,8 +13,8 @@ import {
   type PlanCheckoutPayload,
 } from './razorpay';
 import { releaseRealtimeChannel, trackRealtimeChannel } from './realtime-channels';
+import { getMembershipOrFree } from './subscription';
 import { supabase } from './supabase';
-import type { Json } from './database.types';
 
 export type PaymentStatus = 'idle' | 'creating' | 'browser' | 'pending' | 'active' | 'failed';
 
@@ -81,25 +81,6 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function toJson(value: unknown): Json {
-  if (value === null) {
-    return null;
-  }
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(toJson);
-  }
-  if (typeof value === 'object') {
-    const record: Record<string, Json> = {};
-    for (const [key, item] of Object.entries(value)) {
-      record[key] = toJson(item);
-    }
-    return record;
-  }
-  return null;
-}
 
 export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('idle');
@@ -110,6 +91,8 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const activePaymentLinkIdRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
+  // Ref mirror of paymentStatus so callbacks never read a stale closure value.
+  const paymentStatusRef = useRef<PaymentStatus>('idle');
 
   const stopPollingAndChannel = useCallback(() => {
     if (pollTimerRef.current) {
@@ -125,6 +108,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
   const resolveActive = useCallback(() => {
     stopPollingAndChannel();
     if (isMountedRef.current) {
+      paymentStatusRef.current = 'active';
       setPaymentStatus('active');
       setPaymentError(null);
     }
@@ -133,6 +117,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
   const resolveFailed = useCallback(() => {
     stopPollingAndChannel();
     if (isMountedRef.current) {
+      paymentStatusRef.current = 'failed';
       setPaymentStatus('failed');
       setPaymentError(
         'We could not confirm your subscription yet. If you completed payment, ' +
@@ -239,7 +224,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
       stopPollingAndChannel();
       activePaymentLinkIdRef.current = null;
       setPaymentError(null);
-      if (isMountedRef.current) setPaymentStatus('pending');
+      if (isMountedRef.current) { paymentStatusRef.current = 'pending'; setPaymentStatus('pending'); }
 
       if (Platform.OS === 'ios') {
         try {
@@ -307,12 +292,14 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
           }
 
           if (isMountedRef.current) {
+            paymentStatusRef.current = 'active';
             setPaymentStatus('active');
             setPaymentError(null);
           }
         } catch (error) {
           if (isPurchaseCancelled(error)) {
             if (isMountedRef.current) {
+              paymentStatusRef.current = 'idle';
               setPaymentStatus('idle');
               setPaymentError(null);
             }
@@ -320,6 +307,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
           }
 
           if (isMountedRef.current) {
+            paymentStatusRef.current = 'failed';
             setPaymentStatus('failed');
             setPaymentError(getErrorMessage(error));
           }
@@ -329,7 +317,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
 
       if (Platform.OS === 'android') {
         try {
-          if (isMountedRef.current) setPaymentStatus('creating');
+          if (isMountedRef.current) { paymentStatusRef.current = 'creating'; setPaymentStatus('creating'); }
           const { paymentLinkId, shortUrl } = await createRazorpayPaymentLink({
             ...options,
             platform: Platform.OS,
@@ -340,16 +328,18 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
           if (!userId) throw new Error('userId is required for subscription verification');
           startVerification(paymentLinkId, userId);
 
-          if (isMountedRef.current) setPaymentStatus('browser');
+          if (isMountedRef.current) { paymentStatusRef.current = 'browser'; setPaymentStatus('browser'); }
           await openRazorpayPaymentLink(shortUrl);
 
-          if (isMountedRef.current && paymentStatus !== 'active') {
+          if (isMountedRef.current && paymentStatusRef.current !== 'active') {
+            paymentStatusRef.current = 'pending';
             setPaymentStatus('pending');
           }
         } catch (error) {
           const message = getErrorMessage(error);
           console.error('[useSubscriptionPayment] startPayment error:', error);
           if (isMountedRef.current) {
+            paymentStatusRef.current = 'failed';
             setPaymentStatus('failed');
             setPaymentError(message);
           }
@@ -357,7 +347,7 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
         }
       }
     },
-    [paymentStatus, startVerification, stopPollingAndChannel]
+    [startVerification, stopPollingAndChannel]
   );
 
   const restorePurchases = useCallback(async () => {
@@ -381,19 +371,16 @@ export function useSubscriptionPayment(): UseSubscriptionPaymentReturn {
       return activeEntitlements.length > 0;
     }
 
-    const { data, error } = await supabase.functions.invoke('razorpay-link-status', {});
-    return (
-      !error &&
-      typeof data === 'object' &&
-      data !== null &&
-      'status' in data &&
-      data.status === 'active'
-    );
+    // Android has no app-store restore mechanism — check whether the user
+    // already has an active subscription in our DB (e.g. after a reinstall).
+    const membership = await getMembershipOrFree();
+    return membership.is_active === true;
   }, []);
 
   const resetPayment = useCallback(() => {
     stopPollingAndChannel();
     activePaymentLinkIdRef.current = null;
+    paymentStatusRef.current = 'idle';
     setPaymentStatus('idle');
     setPaymentError(null);
   }, [stopPollingAndChannel]);

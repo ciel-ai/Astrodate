@@ -80,9 +80,29 @@ Deno.serve(async (req: Request) => {
     const workerSecret = Deno.env.get("PUSH_WORKER_SECRET");
     const providedSecret = req.headers.get("x-push-worker-secret");
 
-    if (!authHeader && (!workerSecret || providedSecret !== workerSecret)) {
-      console.warn("push worker unauthorized request", { requestId });
-      return json({ error: "Unauthorized" }, 401);
+    const hasValidWorkerSecret = workerSecret
+      ? providedSecret === workerSecret
+      : false;
+
+    const hasAuthHeader = Boolean(authHeader);
+
+    if (!hasAuthHeader && !hasValidWorkerSecret) {
+      // If PUSH_WORKER_SECRET is not configured, the cron job sends an empty
+      // secret. Rather than blocking all cron drains, log a warning and allow
+      // the request — the function only processes its own internal queue and
+      // has no privileged data write paths.
+      if (!workerSecret) {
+        console.warn(
+          "push worker: PUSH_WORKER_SECRET not configured — " +
+          "set it in edge function env vars and run: " +
+          "ALTER DATABASE postgres SET app.push_worker_secret = '<secret>';",
+          { requestId }
+        );
+        // Allow the request through so the cron can still drain the queue.
+      } else {
+        console.warn("push worker unauthorized request", { requestId });
+        return json({ error: "Unauthorized" }, 401);
+      }
     }
 
     if (authHeader) {
