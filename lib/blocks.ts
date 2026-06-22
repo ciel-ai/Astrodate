@@ -32,6 +32,36 @@ export const blockUser = async (
 };
 
 /**
+ * Unblocks a user by deleting the block row.
+ * There is no unblock RPC; the "Users can delete own blocks" RLS policy
+ * (blocker_id = auth.uid()) restricts this delete to the current user's own
+ * block of this person, so we only need to match on blocked_id.
+ * @param blockedUserId - User ID of the user to unblock
+ * @returns Success status and error message if any
+ */
+export const unblockUser = async (
+  blockedUserId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await (supabase as any)
+      .from('block_users')
+      .delete()
+      .eq('blocked_id', blockedUserId);
+
+    if (error) {
+      console.error('❌ Error unblocking user:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('❌ Exception unblocking user:', errorMessage);
+    return { success: false, error: errorMessage };
+  }
+};
+
+/**
  * Gets all blocked user IDs for the current user using get_blocked_user_ids RPC
  * @returns Array of blocked user IDs
  */
