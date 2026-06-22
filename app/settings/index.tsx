@@ -660,7 +660,7 @@ export default function SettingsScreen() {
               />
             </View>
 
-            <View style={[styles.settingRow, styles.settingRowLast]}>
+            <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <MaterialIcons name="circle" size={24} color="#4ADE80" />
                 <View style={styles.settingContent}>
@@ -675,6 +675,21 @@ export default function SettingsScreen() {
                 thumbColor={showOnlineStatus ? '#FFFFFF' : '#FFFFFF'}
               />
             </View>
+
+            <TouchableOpacity
+              style={[styles.settingRow, styles.settingRowLast]}
+              activeOpacity={0.7}
+              onPress={() => router.push('/settings/blocked-users')}
+            >
+              <View style={styles.settingLeft}>
+                <MaterialIcons name="block" size={24} color="#7C3AED" />
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>Blocked Users</Text>
+                  <Text style={styles.settingSubtitle}>Manage who you've blocked</Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.4)" />
+            </TouchableOpacity>
           </View>
         </View>
 
