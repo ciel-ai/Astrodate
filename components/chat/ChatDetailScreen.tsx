@@ -42,6 +42,7 @@ export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [icebreakerDismissed, setIcebreakerDismissed] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const isMountedRef = useRef(true);
   const hasSignaledMessageSent = useRef(false);
@@ -194,6 +195,39 @@ export default function ChatDetailScreen() {
     }
   }, [chatId, router, showAlert]);
 
+  const handleUnblock = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const { unblockUser } = await import('@/lib/blocks');
+      const result = await unblockUser(chatId);
+      if (result.success) {
+        setIsBlocked(false);
+        showAlert('Unblocked', `${user?.name ?? 'This user'} has been unblocked.`);
+      } else {
+        showAlert('Error', result.error ?? 'Failed to unblock. Please try again.');
+      }
+    } catch {
+      showAlert('Error', 'Failed to unblock user. Please try again.');
+    }
+  }, [chatId, user?.name, showAlert]);
+
+  // Detect whether this user is already blocked, so the menu can show
+  // "Unblock" instead of "Block".
+  useEffect(() => {
+    if (!chatId) return;
+    let active = true;
+    (async () => {
+      try {
+        const { getBlockedUserIds } = await import('@/lib/blocks');
+        const result = await getBlockedUserIds();
+        if (active && result.success) {
+          setIsBlocked((result.data ?? []).includes(chatId));
+        }
+      } catch { /* non-fatal */ }
+    })();
+    return () => { active = false; };
+  }, [chatId]);
+
   const handleRetryMessage = useCallback(async (failedMessage: any) => {
     if (!failedMessage?.text || failedMessage.text === failedMessage.id) return;
     removeMessage(failedMessage.id);
@@ -345,6 +379,8 @@ export default function ChatDetailScreen() {
         onUnmatch={handleUnmatchAndDelete}
         onReport={handleReport}
         onBlock={handleBlock}
+        isBlocked={isBlocked}
+        onUnblock={handleUnblock}
       />
     </ErrorBoundary>
   );

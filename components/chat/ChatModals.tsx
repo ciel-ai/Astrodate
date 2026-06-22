@@ -29,6 +29,8 @@ type ChatModalsProps = {
   onUnmatch: () => Promise<void>;
   onReport: () => Promise<void>;
   onBlock: () => Promise<void>;
+  isBlocked?: boolean;
+  onUnblock?: () => Promise<void>;
 };
 
 function getSubcategoriesForCategory(category: string): string[] {
@@ -45,7 +47,7 @@ function getSubcategoriesForCategory(category: string): string[] {
 }
 
 const ChatModals = forwardRef<ChatModalsRef, ChatModalsProps>(function ChatModals(
-  { chatId, channelId, userName, onUnmatch, onReport, onBlock },
+  { chatId, channelId, userName, onUnmatch, onReport, onBlock, isBlocked, onUnblock },
   ref,
 ) {
   const [showMenuModal, setShowMenuModal] = useState(false);
@@ -136,6 +138,18 @@ const ChatModals = forwardRef<ChatModalsRef, ChatModalsProps>(function ChatModal
     );
   }, [userName, onBlock]);
 
+  const handleUnblock = useCallback(() => {
+    setShowMenuModal(false);
+    Alert.alert(
+      `Unblock ${userName}`,
+      `${userName} will be able to appear in your matches and message you again.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Unblock', onPress: () => onUnblock?.() },
+      ],
+    );
+  }, [userName, onUnblock]);
+
   const openReport = useCallback(() => {
     setShowMenuModal(false);
     setReportSaved(false);
@@ -159,9 +173,15 @@ const ChatModals = forwardRef<ChatModalsRef, ChatModalsProps>(function ChatModal
               <Text style={styles.menuOptionText}>Unmatch</Text>
             </TouchableOpacity>
             <View style={styles.menuDivider} />
-            <TouchableOpacity style={styles.menuOption} onPress={handleBlock} activeOpacity={0.7}>
-              <Text style={[styles.menuOptionText, styles.menuOptionTextDanger]}>Block</Text>
-            </TouchableOpacity>
+            {isBlocked ? (
+              <TouchableOpacity style={styles.menuOption} onPress={handleUnblock} activeOpacity={0.7}>
+                <Text style={styles.menuOptionText}>Unblock</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.menuOption} onPress={handleBlock} activeOpacity={0.7}>
+                <Text style={[styles.menuOptionText, styles.menuOptionTextDanger]}>Block</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.menuDivider} />
             <TouchableOpacity style={styles.menuOption} onPress={openReport} activeOpacity={0.7}>
               <Text style={[styles.menuOptionText, styles.menuOptionTextDanger]}>Report</Text>
