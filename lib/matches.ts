@@ -133,11 +133,21 @@ export const getAllMatches = async (): Promise<{ success: boolean; data?: Match[
       if (r.reporter_id) reportedUserIds.add(r.reporter_id);
     });
 
-    // Filter out matches whose channel_id is reported OR whose other user is reported
+    // Hide matches with users the current user has blocked. Blocking keeps the
+    // match (so it can be restored on unblock), so we filter it out here while
+    // the block is active. Unblocking removes the block → the match reappears.
+    const { getBlockedUserIds } = await import('./blocks');
+    const blockedResult = await getBlockedUserIds();
+    const blockedUserIds = new Set<string>(
+      blockedResult.success ? (blockedResult.data ?? []) : []
+    );
+
+    // Filter out matches whose channel_id is reported OR whose other user is reported/blocked
     const filteredMatches = matches.filter((match) => {
       if (reportedChannelIds.includes(match.channel_id)) return false;
       const otherUserId = match.user1_id === currentUserId ? match.user2_id : match.user1_id;
       if (reportedUserIds.has(otherUserId)) return false;
+      if (blockedUserIds.has(otherUserId)) return false;
       return true;
     });
 
