@@ -303,8 +303,6 @@ export default function ChatDetailScreen() {
           connectionStatus={connectionStatus}
           onBackPress={handleBackPress}
           onMenuPress={handleOpenMenu}
-          synastryDetail={synastryDetail}
-          synastryScore={synastryScore}
         />
 
         <KeyboardAvoidingView
