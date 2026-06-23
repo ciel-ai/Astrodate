@@ -1,4 +1,5 @@
--- Migration 097: Fix messages and reports foreign key constraints for cascading delete
+-- Migration 103: Fix messages and reports foreign key constraints for cascading delete
+-- (renumbered from a duplicate 098_ prefix that collided with 098_fix_matching_gender_filters)
 -- Ensures that when a user is deleted, their messages and reports are automatically deleted.
 
 BEGIN;
