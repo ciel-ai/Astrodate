@@ -7,27 +7,13 @@
     "icon": "./assets/images/logo-v2.png",
     "scheme": "astrodate",
     "userInterfaceStyle": "dark",
-    "updates": {
-      "enabled": true,
-      "url": "https://u.expo.dev/0316ec04-75d5-4ab8-ab58-ac9f33069d28",
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
     "ios": {
       "usesAppleSignIn": true,
       "buildNumber": "2",
       "supportsTablet": false,
       "bundleIdentifier": "com.cielinfitech.astrodate",
       "infoPlist": {
-        "NSCameraUsageDescription": "AstroDate needs access to your camera so you can take profile photos and capture pictures to share in chats.",
-        "NSPhotoLibraryUsageDescription": "AstroDate needs access to your photo library so you can choose pictures for your profile and share them in chats.",
-        "NSMicrophoneUsageDescription": "AstroDate needs access to your microphone so you can record and send voice messages in chats.",
-        "NSLocationWhenInUseUsageDescription": "AstroDate uses your location to auto-fill your city and to show matches near you. Your exact location is never shared with other users.",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSUserTrackingUsageDescription": "AstroDate uses your device identifier to measure subscription analytics via RevenueCat and personalise your match recommendations. Your data is never shared with advertisers.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -168,7 +154,7 @@
       [
         "expo-tracking-transparency",
         {
-          "userTrackingPermission": "We use your device identifier to measure app performance and improve your recommendations."
+          "userTrackingPermission": "AstroDate uses your device identifier to measure subscription analytics via RevenueCat and personalise your match recommendations. Your data is never shared with advertisers."
         }
       ],
       "expo-apple-authentication",

@@ -23,18 +23,8 @@ export default function WelcomeScreen() {
       />
 
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* Top Section with Logo and App Name */}
-        <View style={styles.topSection}>
-          <Image 
-            source={require('@/assets/images/logo.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.appName}>
-            <Text style={styles.appNameStart}>Astro</Text>
-            <Text style={styles.appNameEnd}>Date</Text>
-          </Text>
-        </View>
+        {/* Spacer keeps the card anchored to the bottom */}
+        <View />
 
         {/* Bottom Section containing the Glassmorphism Card and Button */}
         <View style={styles.bottomSection}>
@@ -44,7 +34,7 @@ export default function WelcomeScreen() {
             style={styles.glassCard}
           >
             <Text style={styles.cardHeaderStar}>✦</Text>
-            
+
             <Text style={styles.cardTitle}>
               Find Your{'\n'}
               <Text style={styles.cardTitleHighlight}>Cosmic Match</Text>
@@ -109,26 +99,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     justifyContent: 'space-between',
-  },
-  topSection: {
-    alignItems: 'center',
-    paddingTop: SCREEN_HEIGHT * 0.015,
-  },
-  logo: {
-    width: 56,
-    height: 56,
-    marginBottom: 6,
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  appNameStart: {
-    color: '#FFFFFF',
-  },
-  appNameEnd: {
-    color: '#A855F7', // rich purple matching the logo
   },
   bottomSection: {
     paddingBottom: SCREEN_HEIGHT * 0.04,
