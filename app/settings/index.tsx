@@ -7,10 +7,8 @@ import { useSubscriptionPayment } from '@/lib/useSubscriptionPayment';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRouter } from 'expo-router';
-import { SUPABASE_URL } from '@/lib/supabase';
 import { deleteSecureItem } from '@/lib/secure-storage';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -38,10 +36,6 @@ export default function SettingsScreen() {
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-
-  // ─── Linked accounts state ──────────────────────────────────────────────────
-  const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
-  const [linkingApple, setLinkingApple] = useState(false);
 
   // ─── Email account state ────────────────────────────────────────────────────
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
@@ -156,7 +150,6 @@ export default function SettingsScreen() {
         const identities = user.identities ?? [];
         const hasEmailIdentity = identities.some((id: any) => id.provider === 'email');
         setEmailAuthUser(hasEmailIdentity);
-        setLinkedProviders(identities.map((id: any) => id.provider as string));
       } catch (err) {
         console.warn('[settings] Could not load email info:', err);
       }
@@ -258,67 +251,6 @@ export default function SettingsScreen() {
     );
   };
 
-  const handleLinkApple = async () => {
-    if (linkingApple) return;
-    setLinkingApple(true);
-    try {
-      // 1. Get the current user's session JWT
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not logged in');
-
-      // 2. Native Apple auth — gets identity token without changing the current session
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-
-      if (!credential.identityToken) throw new Error('No identity token from Apple');
-
-      // 3. Send token to Edge Function — it verifies with Apple and links the identity
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/link-apple-identity`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ apple_identity_token: credential.identityToken }),
-      });
-
-      let json: any = {};
-      try {
-        json = await res.json();
-      } catch {
-        throw new Error(`HTTP ${res.status}: response was not JSON`);
-      }
-
-      if (!res.ok) {
-        if (res.status === 409) {
-          showAlert('Already Linked', json.error ?? 'This Apple ID is linked to a different account.');
-        } else {
-          throw new Error(`HTTP ${res.status}: ${json.error ?? 'Unknown error'}`);
-        }
-        return;
-      }
-
-      // 4. Refresh local identity list
-      const { data: { user: updated } } = await supabase.auth.getUser();
-      setLinkedProviders((updated?.identities ?? []).map((id: any) => id.provider as string));
-
-      if (json.status === 'already_linked') {
-        showAlert('Already Linked', 'Your Apple ID is already connected to this account.');
-      } else {
-        showAlert('Apple ID Linked', 'You can now sign in with your Apple ID next time.');
-      }
-    } catch (err: any) {
-      if (err?.code === 'ERR_REQUEST_CANCELED') return; // user dismissed Apple sheet
-      showAlert('Linking Failed', err?.message ?? 'Could not link Apple ID. Please try again.');
-    } finally {
-      setLinkingApple(false);
-    }
-  };
-
   const handleLogout = () => {
     showAlert('Logout', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
@@ -331,12 +263,6 @@ export default function SettingsScreen() {
             // Deactivate push token in the background so network failure doesn't block logout
             deactivateCurrentDevicePushToken().catch(console.warn);
             
-            // Sign out from native Google client
-            try {
-              const { GoogleSignin } = require('@react-native-google-signin/google-signin');
-              await GoogleSignin.signOut();
-            } catch (e) {}
-
             // Delete secure details items
             await deleteSecureItem('userBasicDetails').catch(() => {});
             await deleteSecureItem('userBirthDetails').catch(() => {});
@@ -694,46 +620,6 @@ export default function SettingsScreen() {
         </View>
 
 
-
-        {/* Linked Accounts Section — iOS only (Apple Sign In) */}
-        {Platform.OS === 'ios' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Linked Accounts</Text>
-            <View style={styles.settingsCard}>
-              <View style={[styles.settingRow, styles.settingRowLast]}>
-                <View style={styles.settingLeft}>
-                  <Ionicons
-                    name="logo-apple"
-                    size={24}
-                    color={linkedProviders.includes('apple') ? '#4ADE80' : '#7C3AED'}
-                  />
-                  <View style={styles.settingContent}>
-                    <Text style={styles.settingTitle}>Apple ID</Text>
-                    <Text style={styles.settingSubtitle}>
-                      {linkedProviders.includes('apple')
-                        ? 'Linked — you can sign in with Apple'
-                        : 'Not linked — tap to connect your Apple ID'}
-                    </Text>
-                  </View>
-                </View>
-                {linkedProviders.includes('apple') ? (
-                  <MaterialIcons name="check-circle" size={22} color="#4ADE80" />
-                ) : (
-                  <TouchableOpacity
-                    style={styles.linkButton}
-                    onPress={handleLinkApple}
-                    disabled={linkingApple}
-                    activeOpacity={0.8}
-                  >
-                    {linkingApple
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={styles.linkButtonText}>Link</Text>}
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
-        )}
 
         {/* Email & Account Security Section */}
         {!!(currentEmail || emailAuthUser) && (

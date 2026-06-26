@@ -5,11 +5,7 @@ import { getSecureItem, setSecureItem, deleteSecureItem } from '@/lib/secure-sto
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase, SUPABASE_URL } from '@/lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { memo, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
@@ -120,10 +116,8 @@ export default function BasicDetailsScreen() {
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [thanksVisible, setThanksVisible] = useState(false);
-  const [showManualEmail, setShowManualEmail] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
   const isMountedRef = React.useRef(true);
   const { showAlert } = useAuthAlert();
 
@@ -441,10 +435,6 @@ export default function BasicDetailsScreen() {
       try {
         await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
         await supabase.auth.signOut();
-        try {
-          const { GoogleSignin } = require('@react-native-google-signin/google-signin');
-          await GoogleSignin.signOut();
-        } catch (e) {}
       } catch (err) {
         console.warn('Sign out error on back:', err);
       }
@@ -480,127 +470,6 @@ export default function BasicDetailsScreen() {
     }
   };
 
-
-  const handleSocialVerify = async (provider: 'google' | 'apple') => {
-    try {
-      setIsLinkingGoogle(true);
-
-      // ── iOS Apple: use the native SDK (no web OAuth needed) ──────────────────
-      if (provider === 'apple' && Platform.OS === 'ios') {
-        const credential = await AppleAuthentication.signInAsync({
-          requestedScopes: [
-            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-            AppleAuthentication.AppleAuthenticationScope.EMAIL,
-          ],
-        });
-
-        // Link this Apple identity to the current phone user so that
-        // "Continue with Apple" on the login screen works for returning users.
-        if (credential.identityToken) {
-          try {
-            const { data: { session: currentSession } } = await supabase.auth.getSession();
-            if (currentSession?.access_token) {
-              const res = await fetch(`${SUPABASE_URL}/functions/v1/link-apple-identity`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${currentSession.access_token}`,
-                },
-                body: JSON.stringify({ apple_identity_token: credential.identityToken }),
-              });
-              if (!res.ok) {
-                const json = await res.json().catch(() => ({}));
-                console.warn('Apple identity link failed (non-blocking):', json.error);
-              }
-            }
-          } catch (linkErr) {
-            console.warn('Apple identity linking error (non-blocking):', linkErr);
-          }
-        }
-
-        let foundEmail = credential.email;
-        if (!foundEmail) {
-          const { data: sessionData } = await supabase.auth.getSession();
-          foundEmail = sessionData?.session?.user?.email ?? null;
-        }
-
-        if (foundEmail) {
-          setEmail(foundEmail);
-          setErrors((prev) => ({ ...prev, email: '' }));
-          setStepIndex((prev) => prev + 1);
-        } else {
-          setShowManualEmail(true);
-        }
-        return;
-      }
-
-      // ── Google OAuth (and Apple web OAuth if ever enabled for Android) ────────
-      await AsyncStorage.setItem('oauth_flow_action', 'link');
-      const redirectUrl = Linking.createURL('auth/callback');
-      console.log(`🔗 [auth] Starting ${provider} link with redirect:`, redirectUrl);
-
-      const { data, error } = await supabase.auth.linkIdentity({
-        provider,
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (error) throw error;
-      if (data?.url) {
-        if (Platform.OS === 'android') {
-          console.log('➡️ [auth] Android: Opening external browser via Linking.openURL...');
-          await Linking.openURL(data.url);
-        } else {
-          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          console.log('📱 [auth] Link Identity browser session result:', result.type);
-          if (result.type === 'success' && result.url) {
-            console.log('➡️ [auth] Redirect URL captured from browser, routing manually...');
-            const queryParams = result.url.split('?')[1] || '';
-            const hashParams = result.url.includes('#') ? `#${result.url.split('#')[1]}` : '';
-            router.replace(`/auth/callback?${queryParams}${hashParams}`);
-          }
-        }
-      }
-    } catch (err: any) {
-      await AsyncStorage.removeItem('oauth_flow_action').catch(() => {});
-      if (err?.code === 'ERR_REQUEST_CANCELED') return;
-      console.warn(`⚠️ ${provider} verify error:`, err);
-      
-      const msg = (err?.message || '').toLowerCase();
-      const isStaleUser = msg.includes('sub claim') || 
-                          msg.includes('user_not_found') || 
-                          msg.includes('user not found') ||
-                          (err?.status === 400 && msg.includes('jwt'));
-      
-      if (isStaleUser) {
-        showAlert(
-          'Session Expired',
-          'Your login session is invalid or has expired. Please sign in again.',
-          [
-            {
-              text: 'OK',
-              onPress: async () => {
-                try {
-                  await supabase.auth.signOut();
-                  await AsyncStorage.removeItem('userBasicDetails');
-                } catch (signOutErr) {
-                  console.warn('Sign out error:', signOutErr);
-                }
-                router.replace('/onboarding/welcome');
-              }
-            }
-          ]
-        );
-        return;
-      }
-      
-      showAlert('Verification Failed', err.message || `Could not connect ${provider}. Please try again.`);
-    } finally {
-      if (isMountedRef.current) setIsLinkingGoogle(false);
-    }
-  };
 
   const renderStepInput = () => {
     if (currentStep.id === 'gender') {
@@ -682,77 +551,20 @@ export default function BasicDetailsScreen() {
     if (currentStep.id === 'email') {
       return (
         <View style={styles.inputWrapper}>
-          {showManualEmail ? (
-            <>
-              <Text style={styles.helperText}>Please enter your email manually.</Text>
-              <TextInput
-                style={[styles.textInput, errors.email && styles.textInputError, { marginTop: 12 }]}
-                placeholder="you@example.com"
-                placeholderTextColor="rgba(107, 114, 128, 0.7)"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  setErrors((prev) => ({ ...prev, email: '' }));
-                }}
-              />
-            </>
-          ) : email ? (
-            <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-              <MaterialIcons name="check-circle" size={48} color={COLORS.success} />
-              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginTop: 12 }}>Email Verified</Text>
-              <Text style={{ fontSize: 16, color: COLORS.textSecondary, marginTop: 4 }}>{email}</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.helperText}>Connect your account to securely verify your email address. We'll only use it for important updates.</Text>
-              <View style={styles.authButtonsContainer}>
-                {/* Apple Sign In — iOS only (web OAuth for Android requires a separate
-                    Apple Service ID and is not supported in this build) */}
-                {Platform.OS === 'ios' && (
-                  <View style={{ width: '100%', pointerEvents: isLinkingGoogle ? 'none' : 'auto', opacity: isLinkingGoogle ? 0.5 : 1 }}>
-                    <AppleAuthentication.AppleAuthenticationButton
-                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                      cornerRadius={25}
-                      style={{ width: '100%', height: 50 }}
-                      onPress={() => handleSocialVerify('apple')}
-                    />
-                    {isLinkingGoogle && (
-                      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' }]}>
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      </View>
-                    )}
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={[styles.socialButton, styles.googleButton, isLinkingGoogle && styles.buttonDisabled]}
-                  onPress={() => handleSocialVerify('google')}
-                  disabled={isLinkingGoogle}
-                >
-                  {isLinkingGoogle ? (
-                    <ActivityIndicator color="#000000" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="logo-google" size={20} color="#000000" style={styles.socialIcon} />
-                      <Text style={styles.googleButtonText}>Verify with Google</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowManualEmail(true)}
-                style={{ marginTop: 16, alignItems: 'center' }}
-              >
-                <Text style={{ color: COLORS.accent, fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' }}>
-                  Verify with email address instead
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
-          {errors[currentStep.id] ? <Text style={[styles.errorText, { marginTop: 12, textAlign: 'center' }]}>{errors[currentStep.id]}</Text> : null}
+          <TextInput
+            style={[styles.textInput, errors.email && styles.textInputError]}
+            placeholder="you@example.com"
+            placeholderTextColor="rgba(107, 114, 128, 0.7)"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={email}
+            onChangeText={(text) => {
+              setEmail(text);
+              setErrors((prev) => ({ ...prev, email: '' }));
+            }}
+          />
+          {errors[currentStep.id] ? <Text style={[styles.errorText, { marginTop: 12 }]}>{errors[currentStep.id]}</Text> : null}
         </View>
       );
     }

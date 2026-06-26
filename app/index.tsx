@@ -1,35 +1,14 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, Platform } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import { supabase } from '@/lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function SplashScreen() {
   const router = useRouter();
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showCombinedModal, setShowCombinedModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'terms' | 'privacy'>('terms');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    try {
-      console.log('[GoogleSignin] Configuring with webClientId:', process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
-      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
-      GoogleSignin.configure({
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-      });
-    } catch (err) {
-      console.warn('[GoogleSignin] Native module not available (running in Expo Go?):', err);
-    }
-  }, []);
 
   const handleCheckboxPress = () => {
     // Just toggle the checkbox state
@@ -48,157 +27,6 @@ export default function SplashScreen() {
   const handleGetStarted = () => {
     if (agreedToTerms) {
       router.replace('/onboarding/welcome');
-    }
-  };
-
-  const checkUserAndNavigate = async (userId?: string, email?: string) => {
-    if (!userId) {
-      router.replace('/onboarding/login');
-      return;
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('user_id')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error('[index checkUserAndNavigate] profile lookup error:', profileError);
-      await supabase.auth.signOut();
-      Alert.alert('Login Failed', 'Could not load your account. Please try again.', [
-        { text: 'OK', onPress: () => router.replace('/onboarding/login') },
-      ]);
-      return;
-    }
-
-    if (!profile && email) {
-      const { data: profileByEmail } = await supabase
-        .from('user_profiles')
-        .select('user_id')
-        .eq('email', email)
-        .maybeSingle();
-      if (profileByEmail) {
-        router.replace('/(tabs)');
-        return;
-      }
-    }
-
-    if (profile) {
-      router.replace('/(tabs)');
-    } else {
-      // New Google user — send them to complete their profile
-      await AsyncStorage.removeItem('basic_details_draft').catch(() => {});
-      router.replace('/onboarding/basic-details');
-    }
-  };
-
-  const handleSocialLogin = async (provider: 'google' | 'apple') => {
-    if (isLoggingIn) return;
-    if (!agreedToTerms) return;
-    
-    try {
-      setIsLoggingIn(true);
-      
-      if (provider === 'apple' && Platform.OS === 'ios') {
-        const credential = await AppleAuthentication.signInAsync({
-          requestedScopes: [
-            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-            AppleAuthentication.AppleAuthenticationScope.EMAIL,
-          ],
-        });
-        
-        if (credential.identityToken) {
-          const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
-            provider: 'apple',
-            token: credential.identityToken,
-          });
-          
-          if (error) throw error;
-          await checkUserAndNavigate(
-            sessionData.session?.user?.id,
-            sessionData.session?.user?.email
-          );
-          return;
-        } else {
-          throw new Error('No identity token returned from Apple.');
-        }
-      }
-
-      if (provider === 'google') {
-        let GoogleSignin;
-        try {
-          GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
-        } catch (err) {
-          Alert.alert(
-            'Not Supported in Expo Go',
-            'Native Google Sign-In is only available in a custom development build. Please use Phone Login or run a development build (npx expo run:android / ios) to test Google login.'
-          );
-          setIsLoggingIn(false);
-          return;
-        }
-
-        await GoogleSignin.hasPlayServices();
-        try {
-          await GoogleSignin.signOut();
-        } catch (e) {}
-        const userInfo = await GoogleSignin.signIn();
-        const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
-
-        if (idToken) {
-          const { data: sessionData, error } = await supabase.auth.signInWithIdToken({
-            provider: 'google',
-            token: idToken,
-          });
-
-          if (error) throw error;
-          await checkUserAndNavigate(
-            sessionData.session?.user?.id,
-            sessionData.session?.user?.email
-          );
-          return;
-        } else {
-          throw new Error('No identity token returned from Google.');
-        }
-      }
-
-      // Fallback to web OAuth for other cases (e.g. Apple on Android)
-      await AsyncStorage.setItem('oauth_flow_action', 'login');
-      const redirectUrl = Linking.createURL('auth/callback');
-      console.log('[auth] Starting OAuth with redirect:', redirectUrl);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: redirectUrl,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.url) {
-        if (Platform.OS === 'android') {
-          console.log('➡️ [auth] Android: Opening external browser via Linking.openURL...');
-          await Linking.openURL(data.url);
-        } else {
-          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          console.log('📱 [auth] Google OAuth browser session result:', result.type);
-          if (result.type === 'success' && result.url) {
-            console.log('➡️ [auth] Redirect URL captured from browser, routing manually...');
-            const queryParams = result.url.split('?')[1] || '';
-            const hashParams = result.url.includes('#') ? `#${result.url.split('#')[1]}` : '';
-            router.replace(`/auth/callback?${queryParams}${hashParams}`);
-          }
-        }
-      }
-    } catch (err) {
-      await AsyncStorage.removeItem('oauth_flow_action').catch(() => {});
-      console.error('Social login error:', err);
-      Alert.alert('Login Failed', 'Please try again.', [
-        { text: 'OK', onPress: () => router.replace('/onboarding/login') },
-      ]);
-    } finally {
-      setIsLoggingIn(false);
     }
   };
 
@@ -260,57 +88,13 @@ export default function SplashScreen() {
         </View>
 
         <View style={styles.authButtonsContainer}>
-          {Platform.OS === 'ios' ? (
-            <View style={{ width: '100%', pointerEvents: (isLoggingIn || !agreedToTerms) ? 'none' : 'auto', opacity: (!agreedToTerms || isLoggingIn) ? 0.5 : 1 }}>
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                cornerRadius={25}
-                style={{ width: '100%', height: 50 }}
-                onPress={() => handleSocialLogin('apple')}
-              />
-              {isLoggingIn && (
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' }]}>
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                </View>
-              )}
-            </View>
-          ) : (
-            <TouchableOpacity 
-              style={[styles.socialButton, styles.appleButton, (!agreedToTerms || isLoggingIn) && styles.buttonDisabled]} 
-              onPress={() => handleSocialLogin('apple')}
-              activeOpacity={agreedToTerms ? 0.8 : 1}
-              disabled={!agreedToTerms || isLoggingIn}
-            >
-              {isLoggingIn ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.socialIcon} />
-                  <Text style={styles.appleButtonText}>
-                    Continue with Apple
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity 
-            style={[styles.socialButton, styles.googleButton, (!agreedToTerms || isLoggingIn) && styles.buttonDisabled]} 
-            onPress={() => handleSocialLogin('google')}
-            activeOpacity={agreedToTerms ? 0.8 : 1}
-            disabled={!agreedToTerms || isLoggingIn}
+          <TouchableOpacity
+            style={[styles.getStartedButton, !agreedToTerms && styles.buttonDisabled]}
+            onPress={handleGetStarted}
+            activeOpacity={agreedToTerms ? 0.85 : 1}
+            disabled={!agreedToTerms}
           >
-            {isLoggingIn ? (
-              <ActivityIndicator color="#000000" size="small" />
-            ) : (
-              <>
-                <Ionicons name="logo-google" size={20} color="#000000" style={styles.socialIcon} />
-                <Text style={styles.googleButtonText}>
-                  Continue with Google
-                </Text>
-              </>
-            )}
+            <Text style={styles.getStartedButtonText}>Get Started</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -616,39 +400,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     gap: 12,
   },
-  socialButton: {
-    flexDirection: 'row',
+  getStartedButton: {
+    width: '100%',
+    backgroundColor: COLORS.accent,
+    paddingVertical: 16,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 40,
-    elevation: 3,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  socialIcon: {
-    marginRight: 10,
-  },
-  appleButton: {
-    backgroundColor: '#000000',
-    shadowColor: '#000000',
-  },
-  appleButtonText: {
+  getStartedButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  googleButton: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  googleButtonText: {
-    color: '#000000',
-    fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   buttonDisabled: {
     opacity: 0.5,
